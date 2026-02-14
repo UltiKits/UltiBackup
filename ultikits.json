@@ -1,0 +1,6 @@
+{
+  "identifyString": "ultibackup",
+  "name": "UltiBackup",
+  "shortDescription": "完整的玩家背包备份与恢复系统，支持自动备份、GUI管理界面和SHA-256数据完整性校验。",
+  "categoryId": 1
+}
