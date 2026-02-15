@@ -536,8 +536,182 @@ class BackupListenerTest {
             verify(player).sendMessage("backup.message.restore_failed");
         }
 
-        // Note: CHECKSUM_FAILED path opens ForceRestoreConfirmPage which requires
-        // ObliviateInv's InventoryAPI to be initialized. Cannot test without the framework.
+        @Test
+        @DisplayName("Should show checksum_failed and open ForceRestoreConfirmPage on CHECKSUM_FAILED")
+        void checksumFailed() {
+            UUID targetUuid = UUID.randomUUID();
+            Player targetPlayer = UltiBackupTestHelper.createMockPlayer("Target", targetUuid);
+            BackupMetadata backup = BackupMetadata.builder()
+                    .playerUuid(targetUuid.toString())
+                    .playerName("Target")
+                    .build();
+
+            BackupGUI gui = mock(BackupGUI.class);
+            when(gui.getTargetUuid()).thenReturn(targetUuid);
+            when(gui.getBackupAtSlot(3)).thenReturn(backup);
+
+            when(backupService.restoreBackup(targetPlayer, backup))
+                    .thenReturn(BackupService.RestoreResult.CHECKSUM_FAILED);
+
+            try (MockedStatic<Bukkit> bukkitMock = mockStatic(Bukkit.class)) {
+                // First call returns targetPlayer (for handleRestore),
+                // second call returns null (for ForceRestoreConfirmPage.open to avoid ObliviateInv GUI init)
+                bukkitMock.when(() -> Bukkit.getPlayer(targetUuid))
+                        .thenReturn(targetPlayer)
+                        .thenReturn(null);
+
+                InventoryClickEvent event = createClickEventForHolder(gui, player, 3);
+                listener.onBackupGUIClick(event);
+            }
+
+            verify(player).sendMessage("backup.message.checksum_failed");
+            verify(player).sendMessage("backup.message.checksum_hint");
+            verify(player).closeInventory();
+            // ForceRestoreConfirmPage.open() gets null target, so sends player_offline
+            verify(player).sendMessage(argThat(
+                    (String msg) -> msg.contains("player_offline")));
+        }
+
+        @Test
+        @DisplayName("Should notify target on admin restore success (different player)")
+        void adminRestoreNotifiesTarget() {
+            UUID targetUuid = UUID.randomUUID();
+            Player targetPlayer = UltiBackupTestHelper.createMockPlayer("Target", targetUuid);
+            BackupMetadata backup = BackupMetadata.builder()
+                    .playerUuid(targetUuid.toString())
+                    .playerName("Target")
+                    .build();
+
+            BackupGUI gui = mock(BackupGUI.class);
+            when(gui.getTargetUuid()).thenReturn(targetUuid);
+            when(gui.getBackupAtSlot(3)).thenReturn(backup);
+
+            when(backupService.restoreBackup(targetPlayer, backup))
+                    .thenReturn(BackupService.RestoreResult.SUCCESS);
+
+            try (MockedStatic<Bukkit> bukkitMock = mockStatic(Bukkit.class)) {
+                bukkitMock.when(() -> Bukkit.getPlayer(targetUuid)).thenReturn(targetPlayer);
+
+                InventoryClickEvent event = createClickEventForHolder(gui, player, 3);
+                listener.onBackupGUIClick(event);
+            }
+
+            verify(player).sendMessage("backup.message.restored");
+            verify(targetPlayer).sendMessage(argThat(
+                    (String msg) -> msg.contains("restored_by_admin")));
+        }
+    }
+
+    // ==================== Shift-Left-Click Preview ====================
+
+    @Nested
+    @DisplayName("Shift-Left-Click Preview")
+    class ShiftLeftClickPreview {
+
+        @Test
+        @DisplayName("Should open preview GUI on shift-left-click")
+        void shiftLeftClickOpensPreview() {
+            BackupGUI gui = mock(BackupGUI.class);
+            BackupMetadata backup = BackupMetadata.builder()
+                    .playerUuid(playerUuid.toString())
+                    .playerName("TestPlayer")
+                    .backupTime(1700000000000L)
+                    .backupReason("MANUAL")
+                    .worldName("world")
+                    .expLevel(10)
+                    .build();
+            backup.setId("preview-id");
+            when(gui.getBackupAtSlot(5)).thenReturn(backup);
+
+            // BackupPreviewGUI.open() calls loadBackupContent and then opens inventory
+            when(backupService.loadBackupContent(backup)).thenReturn(null);
+
+            InventoryClickEvent event = createShiftLeftClickEventForHolder(gui, player, 5);
+            listener.onBackupGUIClick(event);
+
+            // When content is null, should send load_failed message
+            verify(player).sendMessage("backup.message.load_failed");
+        }
+    }
+
+    // ==================== Admin delete permission ====================
+
+    @Nested
+    @DisplayName("Admin delete permission")
+    class AdminDeletePermission {
+
+        @Test
+        @DisplayName("Should allow delete with admin permission even without delete permission")
+        void adminCanDelete() {
+            BackupGUI gui = mock(BackupGUI.class);
+            BackupMetadata backup = BackupMetadata.builder().build();
+            backup.setId("admin-del-id");
+            when(gui.getBackupAtSlot(5)).thenReturn(backup);
+
+            when(player.hasPermission("ultibackup.delete")).thenReturn(false);
+            when(player.hasPermission("ultibackup.admin")).thenReturn(true);
+
+            InventoryClickEvent event = createRightClickEventForHolder(gui, player, 5);
+            listener.onBackupGUIClick(event);
+
+            verify(backupService).deleteBackup(backup);
+            verify(player).sendMessage("backup.message.deleted");
+        }
+    }
+
+    // ==================== Edge: Slot 47 no permission, not own UUID ====================
+
+    @Nested
+    @DisplayName("Slot 47 permission edge cases")
+    class Slot47Permissions {
+
+        @Test
+        @DisplayName("Should not create backup when no admin and not own UUID")
+        void noPermissionNotOwn() {
+            UUID otherUuid = UUID.randomUUID();
+            BackupGUI gui = mock(BackupGUI.class);
+            when(gui.getTargetUuid()).thenReturn(otherUuid);
+            when(gui.getTargetName()).thenReturn("Other");
+
+            when(player.hasPermission("ultibackup.admin")).thenReturn(false);
+            // player UUID != otherUuid
+
+            InventoryClickEvent event = createClickEventForHolder(gui, player, 47);
+            listener.onBackupGUIClick(event);
+
+            verify(backupService, never()).createBackup(any(), anyString());
+        }
+    }
+
+    // ==================== Click outside item area ====================
+
+    @Nested
+    @DisplayName("Click at slot boundaries")
+    class SlotBoundaries {
+
+        @Test
+        @DisplayName("Should ignore slot 46 (between navigation buttons)")
+        void slot46Ignored() {
+            BackupGUI gui = mock(BackupGUI.class);
+            InventoryClickEvent event = createClickEventForHolder(gui, player, 46);
+            listener.onBackupGUIClick(event);
+
+            // Slot 46 is not handled (not 45, 47, 53, not in 0-44 range)
+            verify(gui, never()).previousPage();
+            verify(gui, never()).nextPage();
+            verify(gui, never()).refresh();
+        }
+
+        @Test
+        @DisplayName("Should ignore slot 49 (page indicator)")
+        void slot49Ignored() {
+            BackupGUI gui = mock(BackupGUI.class);
+            InventoryClickEvent event = createClickEventForHolder(gui, player, 49);
+            listener.onBackupGUIClick(event);
+
+            verify(gui, never()).previousPage();
+            verify(gui, never()).nextPage();
+        }
     }
 
     // --- Helpers ---
@@ -562,6 +736,20 @@ class BackupListenerTest {
         return new InventoryClickEvent(
                 view, InventoryType.SlotType.CONTAINER, rawSlot,
                 ClickType.LEFT, InventoryAction.PICKUP_ALL);
+    }
+
+    private InventoryClickEvent createShiftLeftClickEventForHolder(Object holder, Player whoClicked, int rawSlot) {
+        Inventory inventory = mock(Inventory.class);
+        when(inventory.getHolder()).thenReturn(holder instanceof org.bukkit.inventory.InventoryHolder
+                ? (org.bukkit.inventory.InventoryHolder) holder : null);
+
+        InventoryView view = mock(InventoryView.class);
+        when(view.getTopInventory()).thenReturn(inventory);
+        when(view.getPlayer()).thenReturn(whoClicked);
+
+        return new InventoryClickEvent(
+                view, InventoryType.SlotType.CONTAINER, rawSlot,
+                ClickType.SHIFT_LEFT, InventoryAction.MOVE_TO_OTHER_INVENTORY);
     }
 
     private InventoryClickEvent createRightClickEventForHolder(Object holder, Player whoClicked, int rawSlot) {

@@ -240,4 +240,154 @@ class BackupPreviewGUITest {
             verify(viewer).openInventory(any(Inventory.class));
         }
     }
+
+    // ==================== Tab Switching Full Coverage ====================
+
+    @Nested
+    @DisplayName("Tab switching coverage")
+    class TabSwitchingCoverage {
+
+        @Test
+        @DisplayName("handleTabClick 46 when already on armor should not update")
+        void noOpSameArmorTab() {
+            BackupPreviewGUI gui = new BackupPreviewGUI(plugin, viewer, metadata, content);
+            gui.handleTabClick(46); // switch to armor
+            gui.handleTabClick(46); // same tab - no-op
+            assertThat(gui.getInventory()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("handleTabClick 47 when already on enderchest should not update")
+        void noOpSameEnderchestTab() {
+            BackupPreviewGUI gui = new BackupPreviewGUI(plugin, viewer, metadata, content);
+            gui.handleTabClick(47); // switch to enderchest
+            gui.handleTabClick(47); // same tab - no-op
+            assertThat(gui.getInventory()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("Should switch from enderchest to armor")
+        void enderchestToArmor() {
+            BackupPreviewGUI gui = new BackupPreviewGUI(plugin, viewer, metadata, content);
+            gui.handleTabClick(47); // enderchest
+            gui.handleTabClick(46); // armor
+            assertThat(gui.getInventory()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("Should switch from armor to inventory")
+        void armorToInventory() {
+            BackupPreviewGUI gui = new BackupPreviewGUI(plugin, viewer, metadata, content);
+            gui.handleTabClick(46); // armor
+            gui.handleTabClick(45); // inventory
+            assertThat(gui.getInventory()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("Should switch from enderchest to inventory")
+        void enderchestToInventory() {
+            BackupPreviewGUI gui = new BackupPreviewGUI(plugin, viewer, metadata, content);
+            gui.handleTabClick(47); // enderchest
+            gui.handleTabClick(45); // inventory
+            assertThat(gui.getInventory()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("handleTabClick with non-tab slot should be no-op")
+        void nonTabSlotNoOp() {
+            BackupPreviewGUI gui = new BackupPreviewGUI(plugin, viewer, metadata, content);
+            gui.handleTabClick(10); // not a tab slot
+            assertThat(gui.getInventory()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("handleTabClick 48 should be no-op")
+        void slot48NoOp() {
+            BackupPreviewGUI gui = new BackupPreviewGUI(plugin, viewer, metadata, content);
+            gui.handleTabClick(48);
+            assertThat(gui.getInventory()).isNotNull();
+        }
+    }
+
+    // ==================== Content with null items ====================
+
+    @Nested
+    @DisplayName("Content with null items")
+    class NullItemsContent {
+
+        @Test
+        @DisplayName("Should handle null inventory items in updateInventory")
+        void nullInventoryItems() {
+            BackupContent nullContent = BackupContent.builder()
+                    .inventoryContents(null)
+                    .armorContents(null)
+                    .offhandItem(null)
+                    .enderchestContents(null)
+                    .expLevel(0)
+                    .expProgress(0f)
+                    .build();
+
+            BackupPreviewGUI gui = new BackupPreviewGUI(plugin, viewer, metadata, nullContent);
+            // Should not throw
+            assertThat(gui.getInventory()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("Should handle null armor items when switching to armor tab")
+        void nullArmorTab() {
+            BackupContent nullContent = BackupContent.builder()
+                    .inventoryContents(null)
+                    .armorContents(null)
+                    .offhandItem(null)
+                    .enderchestContents(null)
+                    .build();
+
+            BackupPreviewGUI gui = new BackupPreviewGUI(plugin, viewer, metadata, nullContent);
+            gui.handleTabClick(46); // switch to armor
+            assertThat(gui.getInventory()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("Should handle null enderchest items when switching to enderchest tab")
+        void nullEnderchestTab() {
+            BackupContent nullContent = BackupContent.builder()
+                    .inventoryContents(null)
+                    .armorContents(null)
+                    .offhandItem(null)
+                    .enderchestContents(null)
+                    .build();
+
+            BackupPreviewGUI gui = new BackupPreviewGUI(plugin, viewer, metadata, nullContent);
+            gui.handleTabClick(47); // switch to enderchest
+            assertThat(gui.getInventory()).isNotNull();
+        }
+    }
+
+    // ==================== isTabSlot edge cases ====================
+
+    @Nested
+    @DisplayName("isTabSlot edge cases")
+    class IsTabSlotEdgeCases {
+
+        @Test
+        @DisplayName("Slot 44 should not be a tab slot")
+        void slot44() {
+            BackupPreviewGUI gui = new BackupPreviewGUI(plugin, viewer, metadata, content);
+            assertThat(gui.isTabSlot(44)).isFalse();
+        }
+
+        @Test
+        @DisplayName("Slot 0 should not be a tab slot")
+        void slot0() {
+            BackupPreviewGUI gui = new BackupPreviewGUI(plugin, viewer, metadata, content);
+            assertThat(gui.isTabSlot(0)).isFalse();
+        }
+
+        @Test
+        @DisplayName("Slot 52 should not be a tab slot")
+        void slot52() {
+            BackupPreviewGUI gui = new BackupPreviewGUI(plugin, viewer, metadata, content);
+            assertThat(gui.isTabSlot(52)).isFalse();
+        }
+    }
 }

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.MockedStatic;
 
 import java.io.File;
 import java.io.IOException;
@@ -18,6 +19,7 @@ import java.util.Date;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 @DisplayName("BackupMetadata Tests")
 class BackupMetadataTest {
@@ -401,6 +403,186 @@ class BackupMetadataTest {
                     .build();
 
             assertThat(a).isNotEqualTo(b);
+        }
+    }
+
+    // ==================== Builder Coverage ====================
+
+    @Nested
+    @DisplayName("Builder method coverage")
+    class BuilderMethodCoverage {
+
+        @Test
+        @DisplayName("Should set filePath via builder")
+        void builderFilePath() {
+            BackupMetadata m = BackupMetadata.builder()
+                    .filePath("backups/test.yml")
+                    .build();
+            assertThat(m.getFilePath()).isEqualTo("backups/test.yml");
+        }
+
+        @Test
+        @DisplayName("Should set checksum via builder")
+        void builderChecksum() {
+            BackupMetadata m = BackupMetadata.builder()
+                    .checksum("sha256hash")
+                    .build();
+            assertThat(m.getChecksum()).isEqualTo("sha256hash");
+        }
+
+        @Test
+        @DisplayName("Should set locationX via builder")
+        void builderLocationX() {
+            BackupMetadata m = BackupMetadata.builder()
+                    .locationX(99.9)
+                    .build();
+            assertThat(m.getLocationX()).isEqualTo(99.9);
+        }
+
+        @Test
+        @DisplayName("Should set locationY via builder")
+        void builderLocationY() {
+            BackupMetadata m = BackupMetadata.builder()
+                    .locationY(128.5)
+                    .build();
+            assertThat(m.getLocationY()).isEqualTo(128.5);
+        }
+
+        @Test
+        @DisplayName("Should set locationZ via builder")
+        void builderLocationZ() {
+            BackupMetadata m = BackupMetadata.builder()
+                    .locationZ(-500.3)
+                    .build();
+            assertThat(m.getLocationZ()).isEqualTo(-500.3);
+        }
+
+        @Test
+        @DisplayName("Should set worldName via builder")
+        void builderWorldName() {
+            BackupMetadata m = BackupMetadata.builder()
+                    .worldName("the_end")
+                    .build();
+            assertThat(m.getWorldName()).isEqualTo("the_end");
+        }
+
+        @Test
+        @DisplayName("Should set expLevel via builder")
+        void builderExpLevel() {
+            BackupMetadata m = BackupMetadata.builder()
+                    .expLevel(100)
+                    .build();
+            assertThat(m.getExpLevel()).isEqualTo(100);
+        }
+
+        @Test
+        @DisplayName("Builder toString should contain class name")
+        void builderToString() {
+            String str = BackupMetadata.builder().toString();
+            assertThat(str).contains("BackupMetadata");
+        }
+    }
+
+    // ==================== Reason Display null case ====================
+
+    @Nested
+    @DisplayName("Reason Display null")
+    class ReasonDisplayNull {
+
+        @Test
+        @DisplayName("Should return UNKNOWN when reason is null")
+        void nullReason() {
+            BackupMetadata metadata = BackupMetadata.builder()
+                    .backupReason(null)
+                    .build();
+
+            assertThat(metadata.getReasonDisplay()).isEqualTo("UNKNOWN");
+        }
+    }
+
+    // ==================== getBackupFile with valid path ====================
+
+    @Nested
+    @DisplayName("getBackupFile with Bukkit mock")
+    class GetBackupFileWithMock {
+
+        @Test
+        @DisplayName("Should return File object when path is set and Bukkit available")
+        void returnsFileWithPath() {
+            try (MockedStatic<org.bukkit.Bukkit> bukkitMock =
+                         org.mockito.Mockito.mockStatic(org.bukkit.Bukkit.class)) {
+                File dataFolder = tempDir.toFile();
+                org.bukkit.plugin.Plugin ultiToolsPlugin = mock(org.bukkit.plugin.Plugin.class);
+                when(ultiToolsPlugin.getDataFolder()).thenReturn(dataFolder);
+
+                org.bukkit.plugin.PluginManager pm = mock(org.bukkit.plugin.PluginManager.class);
+                when(pm.getPlugin("UltiTools")).thenReturn(ultiToolsPlugin);
+                bukkitMock.when(org.bukkit.Bukkit::getPluginManager).thenReturn(pm);
+
+                BackupMetadata metadata = BackupMetadata.builder()
+                        .filePath("backups/test_123.yml")
+                        .build();
+
+                File result = metadata.getBackupFile();
+                assertThat(result).isNotNull();
+                assertThat(result.getPath()).contains("backups");
+            }
+        }
+    }
+
+    // ==================== onDelete with Bukkit mock ====================
+
+    @Nested
+    @DisplayName("onDelete with real file")
+    class OnDeleteWithFile {
+
+        @Test
+        @DisplayName("Should delete the backup file when it exists")
+        void deletesFile() throws Exception {
+            // Create a real file
+            File backupsDir = tempDir.resolve("backups").toFile();
+            backupsDir.mkdirs();
+            File backupFile = new File(backupsDir, "to_delete.yml");
+            backupFile.createNewFile();
+            assertThat(backupFile).exists();
+
+            try (MockedStatic<org.bukkit.Bukkit> bukkitMock =
+                         org.mockito.Mockito.mockStatic(org.bukkit.Bukkit.class)) {
+                org.bukkit.plugin.Plugin ultiToolsPlugin = mock(org.bukkit.plugin.Plugin.class);
+                when(ultiToolsPlugin.getDataFolder()).thenReturn(tempDir.toFile());
+
+                org.bukkit.plugin.PluginManager pm = mock(org.bukkit.plugin.PluginManager.class);
+                when(pm.getPlugin("UltiTools")).thenReturn(ultiToolsPlugin);
+                bukkitMock.when(org.bukkit.Bukkit::getPluginManager).thenReturn(pm);
+
+                BackupMetadata metadata = BackupMetadata.builder()
+                        .filePath("backups/to_delete.yml")
+                        .build();
+
+                metadata.onDelete();
+            }
+
+            assertThat(backupFile).doesNotExist();
+        }
+
+        @Test
+        @DisplayName("Should handle gracefully when file does not exist")
+        void fileNotExist() {
+            try (MockedStatic<org.bukkit.Bukkit> bukkitMock =
+                         org.mockito.Mockito.mockStatic(org.bukkit.Bukkit.class)) {
+                org.bukkit.plugin.Plugin ultiToolsPlugin = mock(org.bukkit.plugin.Plugin.class);
+                when(ultiToolsPlugin.getDataFolder()).thenReturn(tempDir.toFile());
+
+                org.bukkit.plugin.PluginManager pm = mock(org.bukkit.plugin.PluginManager.class);
+                when(pm.getPlugin("UltiTools")).thenReturn(ultiToolsPlugin);
+                bukkitMock.when(org.bukkit.Bukkit::getPluginManager).thenReturn(pm);
+
+                BackupMetadata metadata = BackupMetadata.builder()
+                        .filePath("backups/nonexistent_file.yml")
+                        .build();
+
+                assertThatCode(() -> metadata.onDelete()).doesNotThrowAnyException();
+            }
         }
     }
 }

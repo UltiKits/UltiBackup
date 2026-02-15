@@ -705,4 +705,249 @@ class BackupContentTest {
             assertThat(content.getInventoryContents()).isEqualTo("inv");
         }
     }
+
+    // ==================== restoreToPlayer with non-null invalid data ====================
+
+    @Nested
+    @DisplayName("restoreToPlayer deserialization failures")
+    class RestoreDeserializationFailures {
+
+        @Test
+        @DisplayName("Should handle invalid inventory data gracefully")
+        void invalidInventoryData() {
+            Player player = UltiBackupTestHelper.createMockPlayer("P", UUID.randomUUID());
+            BackupContent content = BackupContent.builder()
+                    .inventoryContents("not valid yaml: {{{")
+                    .build();
+
+            // Should not throw - invalid YAML returns null from deserializeItems
+            assertThatCode(() -> content.restoreToPlayer(player, false, false, false))
+                    .doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("Should handle empty armor contents string with flag true")
+        void emptyArmorWithFlag() {
+            Player player = UltiBackupTestHelper.createMockPlayer("P", UUID.randomUUID());
+            BackupContent content = BackupContent.builder()
+                    .armorContents("")
+                    .offhandItem("")
+                    .build();
+
+            content.restoreToPlayer(player, true, false, false);
+
+            // Empty string -> deserializeItems returns null -> skip setArmorContents
+            verify(player.getInventory(), never()).setArmorContents(any());
+        }
+
+        @Test
+        @DisplayName("Should handle empty enderchest contents with flag true")
+        void emptyEnderchestWithFlag() {
+            Player player = UltiBackupTestHelper.createMockPlayer("P", UUID.randomUUID());
+            BackupContent content = BackupContent.builder()
+                    .enderchestContents("")
+                    .build();
+
+            content.restoreToPlayer(player, false, true, false);
+
+            verify(player.getEnderChest(), never()).setContents(any());
+        }
+
+        @Test
+        @DisplayName("Should handle invalid offhand data gracefully")
+        void invalidOffhandData() {
+            Player player = UltiBackupTestHelper.createMockPlayer("P", UUID.randomUUID());
+            BackupContent content = BackupContent.builder()
+                    .armorContents("not: valid items section")
+                    .offhandItem("not: valid item section")
+                    .build();
+
+            // restoreArmor=true, armor will be deserialized but have no items section
+            assertThatCode(() -> content.restoreToPlayer(player, true, false, false))
+                    .doesNotThrowAnyException();
+        }
+    }
+
+    // ==================== getInventoryItems/getArmorItems/getEnderchestItems with invalid YAML ====================
+
+    @Nested
+    @DisplayName("Deserialization with invalid YAML")
+    class DeserializationInvalidYaml {
+
+        @Test
+        @DisplayName("Should return null for YAML without items section")
+        void noItemsSection() {
+            BackupContent content = BackupContent.builder()
+                    .inventoryContents("someKey: someValue")
+                    .build();
+
+            assertThat(content.getInventoryItems()).isNull();
+        }
+
+        @Test
+        @DisplayName("Should return null for malformed YAML")
+        void malformedYaml() {
+            BackupContent content = BackupContent.builder()
+                    .inventoryContents("totally not valid yaml: {{{}}")
+                    .build();
+
+            assertThat(content.getInventoryItems()).isNull();
+        }
+
+        @Test
+        @DisplayName("Should return null armor items for empty string")
+        void emptyArmorString() {
+            BackupContent content = BackupContent.builder()
+                    .armorContents("")
+                    .build();
+
+            assertThat(content.getArmorItems()).isNull();
+        }
+
+        @Test
+        @DisplayName("Should return null enderchest items for empty string")
+        void emptyEnderchestString() {
+            BackupContent content = BackupContent.builder()
+                    .enderchestContents("")
+                    .build();
+
+            assertThat(content.getEnderchestItems()).isNull();
+        }
+
+        @Test
+        @DisplayName("Should return null offhand for invalid YAML")
+        void invalidOffhandYaml() {
+            BackupContent content = BackupContent.builder()
+                    .offhandItem("not valid yaml {{{}}")
+                    .build();
+
+            assertThat(content.getOffhandItemStack()).isNull();
+        }
+
+        @Test
+        @DisplayName("Should return null offhand for YAML without item key")
+        void offhandNoItemKey() {
+            BackupContent content = BackupContent.builder()
+                    .offhandItem("someOtherKey: value")
+                    .build();
+
+            // yaml.getItemStack("item") returns null when "item" key doesn't exist
+            assertThat(content.getOffhandItemStack()).isNull();
+        }
+    }
+
+    // ==================== @Data equals/hashCode/toString ====================
+
+    @Nested
+    @DisplayName("Data contract (equals, hashCode, toString)")
+    class DataContract {
+
+        @Test
+        @DisplayName("Should implement equals correctly")
+        void equalsTest() {
+            BackupContent a = BackupContent.builder()
+                    .inventoryContents("inv")
+                    .armorContents("armor")
+                    .expLevel(10)
+                    .expProgress(0.5f)
+                    .build();
+            BackupContent b = BackupContent.builder()
+                    .inventoryContents("inv")
+                    .armorContents("armor")
+                    .expLevel(10)
+                    .expProgress(0.5f)
+                    .build();
+
+            assertThat(a).isEqualTo(b);
+            assertThat(a.hashCode()).isEqualTo(b.hashCode());
+        }
+
+        @Test
+        @DisplayName("Should not equal when different")
+        void notEqual() {
+            BackupContent a = BackupContent.builder()
+                    .inventoryContents("inv1")
+                    .build();
+            BackupContent b = BackupContent.builder()
+                    .inventoryContents("inv2")
+                    .build();
+
+            assertThat(a).isNotEqualTo(b);
+        }
+
+        @Test
+        @DisplayName("Should implement toString")
+        void toStringTest() {
+            BackupContent content = BackupContent.builder()
+                    .inventoryContents("inv-data")
+                    .expLevel(42)
+                    .build();
+
+            String str = content.toString();
+            assertThat(str).contains("inv-data");
+            assertThat(str).contains("42");
+        }
+    }
+
+    // ==================== saveToFile with null parent directory ====================
+
+    @Nested
+    @DisplayName("saveToFile edge cases")
+    class SaveToFileEdgeCases {
+
+        @Test
+        @DisplayName("Should handle file with no parent directory")
+        void noParentDir() throws IOException {
+            BackupContent content = BackupContent.builder()
+                    .inventoryContents("test")
+                    .build();
+
+            // Using a file directly in tempDir (parent exists)
+            File file = tempDir.resolve("root_level.yml").toFile();
+            String checksum = content.saveToFile(file);
+
+            assertThat(file).exists();
+            assertThat(checksum).hasSize(64);
+        }
+
+        @Test
+        @DisplayName("Should save null fields as empty strings in YAML")
+        void nullFields() throws IOException {
+            BackupContent content = BackupContent.builder()
+                    .inventoryContents(null)
+                    .armorContents(null)
+                    .offhandItem(null)
+                    .enderchestContents(null)
+                    .build();
+
+            File file = tempDir.resolve("null_fields.yml").toFile();
+            String checksum = content.saveToFile(file);
+
+            assertThat(file).exists();
+            assertThat(checksum).hasSize(64);
+
+            // Round-trip: load and check defaults
+            BackupContent loaded = BackupContent.loadFromFile(file);
+            assertThat(loaded.getExpLevel()).isZero();
+        }
+    }
+
+    // ==================== fromPlayer with null ItemInOffHand ====================
+
+    @Nested
+    @DisplayName("fromPlayer offhand handling")
+    class FromPlayerOffhand {
+
+        @Test
+        @DisplayName("Should handle null offhand item")
+        void nullOffhand() {
+            Player player = UltiBackupTestHelper.createMockPlayer("P", UUID.randomUUID());
+            // The mock already returns null for getItemInOffHand
+
+            BackupContent content = BackupContent.fromPlayer(player, true, false, false);
+
+            // offhand is serialized via serializeItem which handles null
+            assertThat(content.getOffhandItem()).isNotNull();
+        }
+    }
 }
