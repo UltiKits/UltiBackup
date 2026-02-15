@@ -62,5 +62,5 @@ jobs:
           RELEASE_BODY: ${{ github.event.release.body }}
         run: |
           ultikits publish --yes \
-            --version "$MODULE_VERSION" \
+            --module-version "$MODULE_VERSION" \
             --changelog "${RELEASE_BODY:-Manual publish}"
