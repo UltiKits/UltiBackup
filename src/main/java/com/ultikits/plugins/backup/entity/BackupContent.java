@@ -390,11 +390,12 @@ public class BackupContent {
             }
             return result;
         } catch (Exception e) {
-            e.printStackTrace();
+            java.util.logging.Logger.getLogger(BackupContent.class.getName())
+                    .log(java.util.logging.Level.WARNING, "Failed to deserialize items", e);
             return null;
         }
     }
-    
+
     /**
      * Deserialize single item from YAML string.
      */
@@ -402,13 +403,14 @@ public class BackupContent {
         if (data == null || data.isEmpty()) {
             return null;
         }
-        
+
         try {
             YamlConfiguration yaml = new YamlConfiguration();
             yaml.loadFromString(data);
             return yaml.getItemStack("item");
         } catch (Exception e) {
-            e.printStackTrace();
+            java.util.logging.Logger.getLogger(BackupContent.class.getName())
+                    .log(java.util.logging.Level.WARNING, "Failed to deserialize item", e);
             return null;
         }
     }
