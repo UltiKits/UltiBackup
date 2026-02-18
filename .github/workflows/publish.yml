@@ -1,21 +1,29 @@
-name: Publish to UltiCloud
+name: Auto Release & Publish
 
 on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - 'LICENSE'
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to publish (e.g. 1.0.0)"
-        required: true
-  release:
-    types: [published]
+        description: "Version override (leave empty to use pom.xml)"
+        required: false
 
 jobs:
-  publish:
+  release-and-publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Set up JDK 8
+      - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           java-version: '8'
@@ -29,38 +37,73 @@ jobs:
 
       - name: Extract version
         id: version
-        env:
-          INPUT_VERSION: ${{ github.event.inputs.version }}
-          REF_NAME: ${{ github.ref_name }}
         run: |
-          if [ -n "$INPUT_VERSION" ]; then
-            echo "VERSION=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
           else
-            echo "VERSION=${REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+            echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Set project version
+      - name: Check if release exists
+        id: check
         env:
-          MODULE_VERSION: ${{ steps.version.outputs.VERSION }}
-        run: mvn versions:set -DnewVersion="$MODULE_VERSION" -DgenerateBackupPoms=false
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v${{ steps.version.outputs.VERSION }}" > /dev/null 2>&1; then
+            echo "EXISTS=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Release v${{ steps.version.outputs.VERSION }} already exists, skipping."
+          else
+            echo "EXISTS=false" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Build with Maven
+      - name: Generate changelog
+        if: steps.check.outputs.EXISTS == 'false'
+        run: |
+          PREV_TAG=$(git tag --sort=-v:refname | head -1)
+          {
+            echo "## 更新日志 / Changelog"
+            echo ""
+            if [ -z "$PREV_TAG" ]; then
+              git log --pretty=format:"- %s"
+            else
+              git log --pretty=format:"- %s" "${PREV_TAG}..HEAD"
+            fi
+            echo ""
+          } > /tmp/changelog.md
+
+      - name: Set project version
+        if: steps.check.outputs.EXISTS == 'false'
+        run: mvn versions:set -DnewVersion="${{ steps.version.outputs.VERSION }}" -DgenerateBackupPoms=false
+
+      - name: Build
+        if: steps.check.outputs.EXISTS == 'false'
         run: mvn clean package -Dmaven.test.skip=true
 
+      - name: Create GitHub Release
+        if: steps.check.outputs.EXISTS == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.version.outputs.VERSION }}" \
+            --title "v${{ steps.version.outputs.VERSION }}" \
+            --notes-file /tmp/changelog.md
+
       - name: Set up Node.js
+        if: steps.check.outputs.EXISTS == 'false'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install UltiKits CLI
+        if: steps.check.outputs.EXISTS == 'false'
         run: npm install -g @ultikits/cli
 
       - name: Publish to UltiCloud
+        if: steps.check.outputs.EXISTS == 'false'
         env:
           ULTIKITS_TOKEN: ${{ secrets.ULTIKITS_TOKEN }}
-          MODULE_VERSION: ${{ steps.version.outputs.VERSION }}
-          RELEASE_BODY: ${{ github.event.release.body }}
         run: |
           ultikits publish --yes \
-            --module-version "$MODULE_VERSION" \
-            --changelog "${RELEASE_BODY:-Manual publish}"
+            --module-version "${{ steps.version.outputs.VERSION }}" \
+            --changelog "$(cat /tmp/changelog.md)"
