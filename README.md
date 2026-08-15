@@ -36,7 +36,7 @@
 ## 📦 安装
 
 ### 依赖项
-- **UltiTools-API 6.2.0+** - 核心框架
+- **UltiTools-API 6.2.1+** - 核心框架
 
 ### 安装步骤
 1. 确保已安装 UltiTools-API
