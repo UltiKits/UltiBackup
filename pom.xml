@@ -164,15 +164,24 @@
                             <goal>check</goal>
                         </goals>
                         <configuration>
+                            <!-- D-07: the GUI layer is verified by Phase 10's real-machine UAT instead of
+                                 by this gate. D-09: every class this pattern removes is enumerated in the
+                                 phase-09 GUI exclusion register and must be named by a Phase 10 assertion.
+                                 This is CheckMojo's own execution-scoped excludes (a sibling of <rules>),
+                                 NOT a top-level <plugin><configuration> block: it filters class files out
+                                 of the bundle before the rule below evaluates it, and only for THIS
+                                 execution; the sibling "report" execution above is untouched, so GUI
+                                 coverage stays visible in the HTML/CSV report per D-07. A <rule><excludes>
+                                 entry does not do this for a BUNDLE-element rule: BundleChecker matches
+                                 includes/excludes against the bundle's own name ("UltiBackup"), not
+                                 per-class names, so placing the pattern there is a no-op that silently
+                                 keeps every GUI class in the ratio; see 09-GATE-SEMANTICS.md finding F-1. -->
+                            <excludes>
+                                <exclude>**/gui/**</exclude>
+                            </excludes>
                             <rules>
                                 <rule>
                                     <element>BUNDLE</element>
-                                    <excludes>
-                                        <!-- D-07: the GUI layer is verified by Phase 10's real-machine UAT instead of
-                                             by this gate. D-09: every class this pattern removes is enumerated in the
-                                             phase-09 GUI exclusion register and must be named by a Phase 10 assertion. -->
-                                        <exclude>**/gui/**</exclude>
-                                    </excludes>
                                     <limits>
                                         <limit>
                                             <counter>LINE</counter>
