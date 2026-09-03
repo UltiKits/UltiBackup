@@ -406,6 +406,260 @@ class BackupMetadataTest {
         }
     }
 
+    // ==================== Lombok-generated equals()/hashCode() branch coverage ====================
+    //
+    // BackupMetadata carries @EqualsAndHashCode(callSuper = true) over eleven fields (six String,
+    // three double, one long, one int) plus BaseDataEntity's own `id` field via callSuper. Each
+    // reference-typed field's generated equals() branch is a null-safe comparison
+    // (`this$x == null ? other$x != null : !this$x.equals(other$x)`) that JaCoCo counts as two
+    // branches; without pinning both the null and non-null-but-different directions for every
+    // field, most of that generated code is never exercised by any test. These tests exist to pin
+    // the equals()/hashCode() *contract* (reflexivity, type-safety, per-field discrimination, and
+    // hashCode consistency with equals) field by field -- not to move a coverage counter.
+    @Nested
+    @DisplayName("equals()/hashCode() contract, field by field")
+    class EqualsHashCodeContract {
+
+        private BackupMetadata full() {
+            return BackupMetadata.builder()
+                    .playerUuid("uuid-1")
+                    .playerName("Steve")
+                    .backupTime(12345L)
+                    .backupReason("MANUAL")
+                    .filePath("backups/file.yml")
+                    .checksum("abc123")
+                    .worldName("world")
+                    .locationX(1.0)
+                    .locationY(2.0)
+                    .locationZ(3.0)
+                    .expLevel(50)
+                    .build();
+        }
+
+        @Test
+        @DisplayName("Reflexive: an instance equals itself")
+        void reflexive() {
+            BackupMetadata a = full();
+            assertThat(a).isEqualTo(a);
+            assertThat(a.equals(a)).isTrue();
+        }
+
+        @Test
+        @DisplayName("Not equal to null")
+        void notEqualToNull() {
+            assertThat(full()).isNotEqualTo(null);
+        }
+
+        @Test
+        @DisplayName("Not equal to an unrelated type")
+        void notEqualToUnrelatedType() {
+            assertThat(full()).isNotEqualTo("not a BackupMetadata");
+            assertThat(full().equals(Integer.valueOf(1))).isFalse();
+        }
+
+        @Test
+        @DisplayName("Two default (all-null/zero) instances are equal")
+        void bothDefaultInstancesEqual() {
+            BackupMetadata a = BackupMetadata.builder().build();
+            BackupMetadata b = BackupMetadata.builder().build();
+            assertThat(a).isEqualTo(b);
+            assertThat(a.hashCode()).isEqualTo(b.hashCode());
+        }
+
+        @Test
+        @DisplayName("Two fully-populated, identical instances are equal with matching hashCode")
+        void fullyPopulatedInstancesEqual() {
+            BackupMetadata a = full();
+            BackupMetadata b = full();
+            assertThat(a).isEqualTo(b);
+            assertThat(a.hashCode()).isEqualTo(b.hashCode());
+        }
+
+        @Test
+        @DisplayName("Differs by id (super field) only")
+        void differsById() {
+            BackupMetadata a = full();
+            BackupMetadata b = full();
+            a.setId("id-a");
+            b.setId("id-b");
+            assertThat(a).isNotEqualTo(b);
+
+            BackupMetadata c = full();
+            BackupMetadata d = full();
+            c.setId("id-shared");
+            d.setId(null);
+            assertThat(c).isNotEqualTo(d);
+        }
+
+        @Test
+        @DisplayName("Differs by playerUuid: null vs value, and value vs different value")
+        void differsByPlayerUuid() {
+            BackupMetadata withUuid = full();
+            BackupMetadata withoutUuid = full();
+            withoutUuid.setPlayerUuid(null);
+            assertThat(withUuid).isNotEqualTo(withoutUuid);
+            assertThat(withoutUuid).isNotEqualTo(withUuid);
+
+            BackupMetadata other = full();
+            other.setPlayerUuid("uuid-2");
+            assertThat(withUuid).isNotEqualTo(other);
+        }
+
+        @Test
+        @DisplayName("Differs by playerName: null vs value, and value vs different value")
+        void differsByPlayerName() {
+            BackupMetadata withName = full();
+            BackupMetadata withoutName = full();
+            withoutName.setPlayerName(null);
+            assertThat(withName).isNotEqualTo(withoutName);
+            assertThat(withoutName).isNotEqualTo(withName);
+
+            BackupMetadata other = full();
+            other.setPlayerName("Alex");
+            assertThat(withName).isNotEqualTo(other);
+        }
+
+        @Test
+        @DisplayName("Differs by backupTime")
+        void differsByBackupTime() {
+            BackupMetadata a = full();
+            BackupMetadata b = full();
+            b.setBackupTime(99999L);
+            assertThat(a).isNotEqualTo(b);
+        }
+
+        @Test
+        @DisplayName("Differs by backupReason: null vs value, and value vs different value")
+        void differsByBackupReason() {
+            BackupMetadata withReason = full();
+            BackupMetadata withoutReason = full();
+            withoutReason.setBackupReason(null);
+            assertThat(withReason).isNotEqualTo(withoutReason);
+            assertThat(withoutReason).isNotEqualTo(withReason);
+
+            BackupMetadata other = full();
+            other.setBackupReason("AUTO");
+            assertThat(withReason).isNotEqualTo(other);
+        }
+
+        @Test
+        @DisplayName("Differs by filePath: null vs value, and value vs different value")
+        void differsByFilePath() {
+            BackupMetadata withPath = full();
+            BackupMetadata withoutPath = full();
+            withoutPath.setFilePath(null);
+            assertThat(withPath).isNotEqualTo(withoutPath);
+            assertThat(withoutPath).isNotEqualTo(withPath);
+
+            BackupMetadata other = full();
+            other.setFilePath("backups/other.yml");
+            assertThat(withPath).isNotEqualTo(other);
+        }
+
+        @Test
+        @DisplayName("Differs by checksum: null vs value, and value vs different value")
+        void differsByChecksum() {
+            BackupMetadata withChecksum = full();
+            BackupMetadata withoutChecksum = full();
+            withoutChecksum.setChecksum(null);
+            assertThat(withChecksum).isNotEqualTo(withoutChecksum);
+            assertThat(withoutChecksum).isNotEqualTo(withChecksum);
+
+            BackupMetadata other = full();
+            other.setChecksum("def456");
+            assertThat(withChecksum).isNotEqualTo(other);
+        }
+
+        @Test
+        @DisplayName("Differs by worldName: null vs value, and value vs different value")
+        void differsByWorldName() {
+            BackupMetadata withWorld = full();
+            BackupMetadata withoutWorld = full();
+            withoutWorld.setWorldName(null);
+            assertThat(withWorld).isNotEqualTo(withoutWorld);
+            assertThat(withoutWorld).isNotEqualTo(withWorld);
+
+            BackupMetadata other = full();
+            other.setWorldName("nether");
+            assertThat(withWorld).isNotEqualTo(other);
+        }
+
+        @Test
+        @DisplayName("Differs by locationX")
+        void differsByLocationX() {
+            BackupMetadata a = full();
+            BackupMetadata b = full();
+            b.setLocationX(999.0);
+            assertThat(a).isNotEqualTo(b);
+        }
+
+        @Test
+        @DisplayName("Differs by locationY")
+        void differsByLocationY() {
+            BackupMetadata a = full();
+            BackupMetadata b = full();
+            b.setLocationY(999.0);
+            assertThat(a).isNotEqualTo(b);
+        }
+
+        @Test
+        @DisplayName("Differs by locationZ")
+        void differsByLocationZ() {
+            BackupMetadata a = full();
+            BackupMetadata b = full();
+            b.setLocationZ(999.0);
+            assertThat(a).isNotEqualTo(b);
+        }
+
+        @Test
+        @DisplayName("Differs by expLevel")
+        void differsByExpLevel() {
+            BackupMetadata a = full();
+            BackupMetadata b = full();
+            b.setExpLevel(1);
+            assertThat(a).isNotEqualTo(b);
+        }
+
+        @Test
+        @DisplayName("hashCode is consistent across repeated calls and changes when a field changes")
+        void hashCodeConsistencyAndSensitivity() {
+            BackupMetadata a = full();
+            int h1 = a.hashCode();
+            int h2 = a.hashCode();
+            assertThat(h1).isEqualTo(h2);
+
+            BackupMetadata b = full();
+            b.setPlayerUuid("different-uuid");
+            assertThat(a.hashCode()).isNotEqualTo(b.hashCode());
+        }
+
+        @Test
+        @DisplayName("hashCode of two default instances matches")
+        void hashCodeOfDefaultsMatches() {
+            BackupMetadata a = BackupMetadata.builder().build();
+            BackupMetadata b = BackupMetadata.builder().build();
+            assertThat(a.hashCode()).isEqualTo(b.hashCode());
+        }
+
+        @Test
+        @DisplayName("canEqual rejects an instance of an unrelated subclass")
+        void canEqualRejectsUnrelatedType() {
+            // A minimal subclass whose canEqual() always returns false exercises the
+            // `!other.canEqual(this)` branch Lombok generates ahead of the field comparisons --
+            // the one branch a same-type field-differs test can never reach, since two
+            // BackupMetadata instances always mutually canEqual() each other.
+            class NeverEqualBackupMetadata extends BackupMetadata {
+                @Override
+                protected boolean canEqual(Object other) {
+                    return false;
+                }
+            }
+            BackupMetadata a = full();
+            NeverEqualBackupMetadata b = new NeverEqualBackupMetadata();
+            assertThat(a).isNotEqualTo(b);
+        }
+    }
+
     // ==================== Builder Coverage ====================
 
     @Nested

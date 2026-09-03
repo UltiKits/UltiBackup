@@ -889,6 +889,173 @@ class BackupContentTest {
         }
     }
 
+    // ==================== Lombok-generated equals()/hashCode() branch coverage ====================
+    //
+    // BackupContent's @Data equals() carries a null-safe branch pair per reference field
+    // (`this$x == null ? other$x != null : !this$x.equals(other$x)`) for each of its four String
+    // fields, plus a direct comparison branch for expLevel (int) and expProgress (float). Only
+    // pinning the "both populated and different" direction (as DataContract.notEqual above does)
+    // leaves the null-vs-value direction of every field's branch, and the whole int/float
+    // comparisons, unexercised. These tests pin the equals()/hashCode() contract per field.
+    @Nested
+    @DisplayName("equals()/hashCode() contract, field by field")
+    class EqualsHashCodeContract {
+
+        private BackupContent full() {
+            return BackupContent.builder()
+                    .inventoryContents("inv")
+                    .armorContents("armor")
+                    .offhandItem("offhand")
+                    .enderchestContents("enderchest")
+                    .expLevel(10)
+                    .expProgress(0.5f)
+                    .build();
+        }
+
+        @Test
+        @DisplayName("Reflexive: an instance equals itself")
+        void reflexive() {
+            BackupContent a = full();
+            assertThat(a).isEqualTo(a);
+            assertThat(a.equals(a)).isTrue();
+        }
+
+        @Test
+        @DisplayName("Not equal to null")
+        void notEqualToNull() {
+            assertThat(full()).isNotEqualTo(null);
+        }
+
+        @Test
+        @DisplayName("Not equal to an unrelated type")
+        void notEqualToUnrelatedType() {
+            assertThat(full()).isNotEqualTo("not a BackupContent");
+            assertThat(full().equals(Integer.valueOf(1))).isFalse();
+        }
+
+        @Test
+        @DisplayName("Two default (all-null/zero) instances are equal")
+        void bothDefaultInstancesEqual() {
+            BackupContent a = BackupContent.builder().build();
+            BackupContent b = BackupContent.builder().build();
+            assertThat(a).isEqualTo(b);
+            assertThat(a.hashCode()).isEqualTo(b.hashCode());
+        }
+
+        @Test
+        @DisplayName("Differs by inventoryContents: null vs value, and value vs different value")
+        void differsByInventoryContents() {
+            BackupContent withValue = full();
+            BackupContent withoutValue = full();
+            withoutValue.setInventoryContents(null);
+            assertThat(withValue).isNotEqualTo(withoutValue);
+            assertThat(withoutValue).isNotEqualTo(withValue);
+
+            BackupContent other = full();
+            other.setInventoryContents("different-inv");
+            assertThat(withValue).isNotEqualTo(other);
+        }
+
+        @Test
+        @DisplayName("Differs by armorContents: null vs value, and value vs different value")
+        void differsByArmorContents() {
+            BackupContent withValue = full();
+            BackupContent withoutValue = full();
+            withoutValue.setArmorContents(null);
+            assertThat(withValue).isNotEqualTo(withoutValue);
+            assertThat(withoutValue).isNotEqualTo(withValue);
+
+            BackupContent other = full();
+            other.setArmorContents("different-armor");
+            assertThat(withValue).isNotEqualTo(other);
+        }
+
+        @Test
+        @DisplayName("Differs by offhandItem: null vs value, and value vs different value")
+        void differsByOffhandItem() {
+            BackupContent withValue = full();
+            BackupContent withoutValue = full();
+            withoutValue.setOffhandItem(null);
+            assertThat(withValue).isNotEqualTo(withoutValue);
+            assertThat(withoutValue).isNotEqualTo(withValue);
+
+            BackupContent other = full();
+            other.setOffhandItem("different-offhand");
+            assertThat(withValue).isNotEqualTo(other);
+        }
+
+        @Test
+        @DisplayName("Differs by enderchestContents: null vs value, and value vs different value")
+        void differsByEnderchestContents() {
+            BackupContent withValue = full();
+            BackupContent withoutValue = full();
+            withoutValue.setEnderchestContents(null);
+            assertThat(withValue).isNotEqualTo(withoutValue);
+            assertThat(withoutValue).isNotEqualTo(withValue);
+
+            BackupContent other = full();
+            other.setEnderchestContents("different-enderchest");
+            assertThat(withValue).isNotEqualTo(other);
+        }
+
+        @Test
+        @DisplayName("Differs by expLevel")
+        void differsByExpLevel() {
+            BackupContent a = full();
+            BackupContent b = full();
+            b.setExpLevel(999);
+            assertThat(a).isNotEqualTo(b);
+        }
+
+        @Test
+        @DisplayName("Differs by expProgress")
+        void differsByExpProgress() {
+            BackupContent a = full();
+            BackupContent b = full();
+            b.setExpProgress(0.99f);
+            assertThat(a).isNotEqualTo(b);
+        }
+
+        @Test
+        @DisplayName("hashCode is consistent across repeated calls and changes when a field changes")
+        void hashCodeConsistencyAndSensitivity() {
+            BackupContent a = full();
+            int h1 = a.hashCode();
+            int h2 = a.hashCode();
+            assertThat(h1).isEqualTo(h2);
+
+            BackupContent b = full();
+            b.setInventoryContents("different");
+            assertThat(a.hashCode()).isNotEqualTo(b.hashCode());
+        }
+
+        @Test
+        @DisplayName("hashCode of two default instances matches")
+        void hashCodeOfDefaultsMatches() {
+            BackupContent a = BackupContent.builder().build();
+            BackupContent b = BackupContent.builder().build();
+            assertThat(a.hashCode()).isEqualTo(b.hashCode());
+        }
+
+        @Test
+        @DisplayName("canEqual rejects an instance of an unrelated subclass")
+        void canEqualRejectsUnrelatedType() {
+            // A minimal subclass whose canEqual() always returns false exercises the
+            // `!other.canEqual(this)` branch Lombok generates ahead of the field comparisons --
+            // the one branch a same-type field-differs test can never reach, since two
+            // BackupContent instances always mutually canEqual() each other.
+            class NeverEqualBackupContent extends BackupContent {
+                @Override
+                protected boolean canEqual(Object other) {
+                    return false;
+                }
+            }
+            BackupContent a = full();
+            NeverEqualBackupContent b = new NeverEqualBackupContent();
+            assertThat(a).isNotEqualTo(b);
+        }
+    }
+
     // ==================== saveToFile with null parent directory ====================
 
     @Nested
