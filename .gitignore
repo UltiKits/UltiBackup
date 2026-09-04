@@ -30,3 +30,7 @@ target/
 .DS_Store
 Thumbs.db
 CLAUDE.md
+
+# Tooling artifacts
+.factorypath
+PROJECT.md

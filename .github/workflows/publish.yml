@@ -30,11 +30,6 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Install parent POM
-        run: |
-          git clone --depth 1 https://github.com/UltiKits/ultikits-module-parent.git /tmp/parent-pom
-          cd /tmp/parent-pom && mvn install -N -q
-
       - name: Extract version
         id: version
         run: |
