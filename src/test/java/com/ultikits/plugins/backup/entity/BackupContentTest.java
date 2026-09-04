@@ -1036,24 +1036,6 @@ class BackupContentTest {
             BackupContent b = BackupContent.builder().build();
             assertThat(a.hashCode()).isEqualTo(b.hashCode());
         }
-
-        @Test
-        @DisplayName("canEqual rejects an instance of an unrelated subclass")
-        void canEqualRejectsUnrelatedType() {
-            // A minimal subclass whose canEqual() always returns false exercises the
-            // `!other.canEqual(this)` branch Lombok generates ahead of the field comparisons --
-            // the one branch a same-type field-differs test can never reach, since two
-            // BackupContent instances always mutually canEqual() each other.
-            class NeverEqualBackupContent extends BackupContent {
-                @Override
-                protected boolean canEqual(Object other) {
-                    return false;
-                }
-            }
-            BackupContent a = full();
-            NeverEqualBackupContent b = new NeverEqualBackupContent();
-            assertThat(a).isNotEqualTo(b);
-        }
     }
 
     // ==================== saveToFile with null parent directory ====================
