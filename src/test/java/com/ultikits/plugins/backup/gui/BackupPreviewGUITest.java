@@ -79,8 +79,13 @@ class BackupPreviewGUITest {
         bukkitMock.when(Bukkit::getItemFactory).thenReturn(itemFactory);
 
         xVersionMock = mockStatic(XVersionUtils.class);
+        // A mock stands in for the filler icon here rather than a real ItemStack: this stub's
+        // return value is never asserted on, and XVersionUtils.getColoredPlaneGlass's own
+        // production implementation is never exercised by this test (it is mocked away above).
+        // A real new ItemStack(Material.GLASS_PANE) touches the live Bukkit registry purely as a
+        // fixture artifact, which is a fixture defect, not evidence this class needs a bootstrap.
         xVersionMock.when(() -> XVersionUtils.getColoredPlaneGlass(any(Colors.class)))
-                .thenReturn(new ItemStack(Material.GLASS_PANE));
+                .thenReturn(mock(ItemStack.class));
     }
 
     @AfterEach
