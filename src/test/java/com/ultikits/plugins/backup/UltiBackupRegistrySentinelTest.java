@@ -16,8 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 /**
  * Reopen-guard sentinel for the module's test-time server bootstrap (Phase 14).
  * <p>
- * Every assertion below depends on a live server having been bootstrapped via
- * {@code MockBukkit.mock()} -- never on a bare registry constant, which
+ * Every assertion below depends on a live server having been bootstrapped in {@link #setUp()} --
+ * never on a bare registry constant, which
  * {@code mockbukkit-v1.21} resolves via {@link java.util.ServiceLoader} merely from being on the
  * classpath, independent of whether a live server was ever mocked. If this class ever goes green
  * without a live-server bootstrap present, the guard has been silently defeated.
