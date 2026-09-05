@@ -8,6 +8,7 @@ import com.ultikits.plugins.backup.gui.BackupPreviewGUI;
 import com.ultikits.plugins.backup.service.BackupService;
 
 import org.bukkit.Bukkit;
+import org.bukkit.damage.DamageSource;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.ClickType;
@@ -717,7 +718,15 @@ class BackupListenerTest {
     // --- Helpers ---
 
     private PlayerDeathEvent createDeathEvent(Player player) {
-        return new PlayerDeathEvent(player, new ArrayList<>(), 0, "died");
+        // Paper 1.21's PlayerDeathEvent constructor now requires a DamageSource (it dropped the
+        // 4-arg spigot-api 1.20 shape this test used). A mocked DamageSource is used rather than
+        // DamageSource.builder(DamageType.GENERIC).build() because DamageType is registry-backed on
+        // Paper 1.21 and would make this constructor throw "No RegistryAccess implementation found"
+        // in this plain-Mockito test JVM -- these tests are about BackupListener's reaction to the
+        // event, not about the damage source, so a mock keeps them green rather than adding an
+        // unrelated registry-access failure.
+        DamageSource damageSource = mock(DamageSource.class);
+        return new PlayerDeathEvent(player, damageSource, new ArrayList<>(), 0, "died");
     }
 
     /**
