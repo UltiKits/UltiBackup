@@ -1,5 +1,6 @@
 package com.ultikits.plugins.backup.gui;
 
+import com.ultikits.plugins.backup.MockBukkitSupport;
 import com.ultikits.plugins.backup.UltiBackupTestHelper;
 import com.ultikits.plugins.backup.entity.BackupMetadata;
 import com.ultikits.plugins.backup.service.BackupService;
@@ -14,6 +15,7 @@ import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryView;
 import org.junit.jupiter.api.*;
+import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockito.MockedStatic;
 
 import java.util.UUID;
@@ -42,6 +44,9 @@ class ForceRestoreConfirmPageTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        MockBukkitSupport.ensureCleanState();
+        MockBukkit.mock();
+
         UltiBackupTestHelper.setUp();
         plugin = UltiBackupTestHelper.getMockPlugin();
         backupService = mock(BackupService.class);
@@ -67,6 +72,7 @@ class ForceRestoreConfirmPageTest {
     @AfterEach
     void tearDown() throws Exception {
         UltiBackupTestHelper.tearDown();
+        MockBukkitSupport.safeUnmock();
     }
 
     // ==================== onConfirm ====================

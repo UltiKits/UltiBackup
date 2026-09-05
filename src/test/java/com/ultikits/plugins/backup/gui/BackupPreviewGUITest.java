@@ -1,5 +1,6 @@
 package com.ultikits.plugins.backup.gui;
 
+import com.ultikits.plugins.backup.MockBukkitSupport;
 import com.ultikits.plugins.backup.UltiBackupTestHelper;
 import com.ultikits.plugins.backup.entity.BackupContent;
 import com.ultikits.plugins.backup.entity.BackupMetadata;
@@ -18,6 +19,7 @@ import org.bukkit.inventory.ItemFactory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.junit.jupiter.api.*;
+import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockito.MockedStatic;
 
 import java.util.UUID;
@@ -38,6 +40,9 @@ class BackupPreviewGUITest {
 
     @BeforeEach
     void setUp() throws Exception {
+        MockBukkitSupport.ensureCleanState();
+        MockBukkit.mock();
+
         UltiBackupTestHelper.setUp();
         plugin = UltiBackupTestHelper.getMockPlugin();
 
@@ -69,7 +74,14 @@ class BackupPreviewGUITest {
         ItemFactory itemFactory = mock(ItemFactory.class);
         lenient().when(itemFactory.getItemMeta(any(Material.class))).thenReturn(itemMeta);
 
-        bukkitMock = mockStatic(Bukkit.class);
+        // CALLS_REAL_METHODS, not the default RETURNS_DEFAULTS: production code (BackupPreviewGUI)
+        // constructs real, registry-backed ItemStacks whose internal static-init chain
+        // (Material.asItemType -> ... -> Tag.<clinit> -> Bukkit.getTag) calls back into Bukkit's
+        // OWN static methods. Under the default answer those calls would return null even though
+        // MockBukkit.mock() above set a live server, because a MockedStatic intercepts every call
+        // to the mocked class regardless of caller. CALLS_REAL_METHODS lets every unstubbed method
+        // fall through to the real Bukkit class body, which reads the live server field.
+        bukkitMock = mockStatic(Bukkit.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         bukkitMock.when(() -> Bukkit.createInventory(any(InventoryHolder.class), eq(54), anyString()))
                 .thenAnswer(inv -> {
                     Inventory mockInv = mock(Inventory.class);
@@ -93,6 +105,7 @@ class BackupPreviewGUITest {
         xVersionMock.close();
         bukkitMock.close();
         UltiBackupTestHelper.tearDown();
+        MockBukkitSupport.safeUnmock();
     }
 
     @Nested

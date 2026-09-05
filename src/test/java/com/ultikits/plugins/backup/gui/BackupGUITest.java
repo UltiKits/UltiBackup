@@ -1,5 +1,6 @@
 package com.ultikits.plugins.backup.gui;
 
+import com.ultikits.plugins.backup.MockBukkitSupport;
 import com.ultikits.plugins.backup.UltiBackupTestHelper;
 import com.ultikits.plugins.backup.entity.BackupMetadata;
 import com.ultikits.plugins.backup.service.BackupService;
@@ -17,6 +18,7 @@ import org.bukkit.inventory.ItemFactory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.junit.jupiter.api.*;
+import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockito.MockedStatic;
 
 import java.util.*;
@@ -37,6 +39,9 @@ class BackupGUITest {
 
     @BeforeEach
     void setUp() throws Exception {
+        MockBukkitSupport.ensureCleanState();
+        MockBukkit.mock();
+
         UltiBackupTestHelper.setUp();
         plugin = UltiBackupTestHelper.getMockPlugin();
 
@@ -49,8 +54,13 @@ class BackupGUITest {
         ItemFactory itemFactory = mock(ItemFactory.class);
         lenient().when(itemFactory.getItemMeta(any(Material.class))).thenReturn(itemMeta);
 
-        // Mock Bukkit.createInventory and Bukkit.getItemFactory
-        bukkitMock = mockStatic(Bukkit.class);
+        // Mock Bukkit.createInventory and Bukkit.getItemFactory. CALLS_REAL_METHODS, not the
+        // default RETURNS_DEFAULTS: production code (BackupGUI) constructs real, registry-backed
+        // ItemStacks whose internal static-init chain (Material.asItemType -> ... -> Tag.<clinit>
+        // -> Bukkit.getTag) calls back into Bukkit's OWN static methods. Under the default answer
+        // those calls would return null even though MockBukkit.mock() above set a live server,
+        // because a MockedStatic intercepts every call to the mocked class regardless of caller.
+        bukkitMock = mockStatic(Bukkit.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         bukkitMock.when(() -> Bukkit.createInventory(any(InventoryHolder.class), eq(54), anyString()))
                 .thenAnswer(inv -> {
                     Inventory mockInv = mock(Inventory.class);
@@ -75,6 +85,7 @@ class BackupGUITest {
         xVersionMock.close();
         bukkitMock.close();
         UltiBackupTestHelper.tearDown();
+        MockBukkitSupport.safeUnmock();
     }
 
     // ==================== Pagination ====================
