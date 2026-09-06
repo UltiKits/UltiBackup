@@ -1,6 +1,5 @@
 package com.ultikits.plugins.backup.gui;
 
-import com.ultikits.plugins.backup.MockBukkitSupport;
 import com.ultikits.plugins.backup.UltiBackupTestHelper;
 import com.ultikits.plugins.backup.entity.BackupMetadata;
 import com.ultikits.plugins.backup.service.BackupService;
@@ -18,7 +17,6 @@ import org.bukkit.inventory.ItemFactory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.junit.jupiter.api.*;
-import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockito.MockedStatic;
 
 import java.util.*;
@@ -39,9 +37,6 @@ class BackupGUITest {
 
     @BeforeEach
     void setUp() throws Exception {
-        MockBukkitSupport.ensureCleanState();
-        MockBukkit.mock();
-
         UltiBackupTestHelper.setUp();
         plugin = UltiBackupTestHelper.getMockPlugin();
 
@@ -85,7 +80,6 @@ class BackupGUITest {
         xVersionMock.close();
         bukkitMock.close();
         UltiBackupTestHelper.tearDown();
-        MockBukkitSupport.safeUnmock();
     }
 
     // ==================== Pagination ====================

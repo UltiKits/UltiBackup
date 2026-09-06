@@ -11,6 +11,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
+import org.mockbukkit.mockbukkit.MockBukkit;
 
 import java.lang.reflect.Field;
 import java.util.UUID;
@@ -24,6 +25,15 @@ import static org.mockito.Mockito.*;
  * <p>
  * Since the singleton pattern has been removed, this helper creates mock
  * UltiToolsPlugin instances for injection into services and commands.
+ * <p>
+ * This class is also the module's single centralized test-time live-server bootstrap
+ * (Phase 14's reopen guard target): {@link #setUp()} installs a live {@code MockBukkit}
+ * server before any mock wiring happens, and {@link #tearDown()} tears it back down.
+ * Every test class in this module that needs a live Bukkit server -- including
+ * {@link UltiBackupRegistrySentinelTest} -- routes through these two methods rather than
+ * calling {@link MockBukkit#mock()}/{@link MockBukkit#unmock()} itself, so that removing or
+ * breaking the bootstrap here is visible to every caller, not just the ones that happen to
+ * exercise GUI code.
  * <p>
  * Call {@link #setUp()} in {@code @BeforeEach} and {@link #tearDown()} in {@code @AfterEach}.
  */
@@ -40,6 +50,12 @@ public final class UltiBackupTestHelper {
      */
     @SuppressWarnings("unchecked")
     public static void setUp() throws Exception {
+        // Centralized live-server bootstrap -- see class javadoc. Must run before any Mockito
+        // wiring below, since production GUI/entity code under test constructs real,
+        // registry-backed Bukkit objects that need a live server to resolve.
+        MockBukkitSupport.ensureCleanState();
+        MockBukkit.mock();
+
         // Mock UltiBackup (abstract UltiToolsPlugin — mockable)
         mockPlugin = mock(UltiBackup.class);
 
@@ -62,6 +78,9 @@ public final class UltiBackupTestHelper {
     public static void tearDown() throws Exception {
         mockPlugin = null;
         mockLogger = null;
+
+        // Centralized live-server teardown -- see class javadoc.
+        MockBukkitSupport.safeUnmock();
     }
 
     public static UltiBackup getMockPlugin() {
