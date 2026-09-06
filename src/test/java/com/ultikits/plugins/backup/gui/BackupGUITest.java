@@ -49,12 +49,23 @@ class BackupGUITest {
         ItemFactory itemFactory = mock(ItemFactory.class);
         lenient().when(itemFactory.getItemMeta(any(Material.class))).thenReturn(itemMeta);
 
-        // Mock Bukkit.createInventory and Bukkit.getItemFactory. CALLS_REAL_METHODS, not the
-        // default RETURNS_DEFAULTS: production code (BackupGUI) constructs real, registry-backed
-        // ItemStacks whose internal static-init chain (Material.asItemType -> ... -> Tag.<clinit>
-        // -> Bukkit.getTag) calls back into Bukkit's OWN static methods. Under the default answer
-        // those calls would return null even though MockBukkit.mock() above set a live server,
-        // because a MockedStatic intercepts every call to the mocked class regardless of caller.
+        // CALLS_REAL_METHODS, not the default RETURNS_DEFAULTS: production code (BackupGUI)
+        // constructs real, registry-backed ItemStacks, and populating that registry calls back
+        // into Bukkit's OWN static methods. Measured chain for `new ItemStack(Material.CHEST)`
+        // against paper-api 1.21.11-R0.1-SNAPSHOT and mockbukkit-v1.21 4.101.0:
+        //     ItemStack.of -> Material.asItemType() -> the memoized itemType supplier ->
+        //     Registry.ITEM.get(key) -> MockBukkit's RegistryMock.loadIfEmpty ->
+        //     ItemTypeMock.from -> BlockStateMetaMock.<clinit> -> MaterialTags.<clinit>, which
+        //     reads org.bukkit.Tag.BEDS -- and org.bukkit.Tag's own <clinit> is what calls
+        //     Bukkit.getTag.
+        // A MockedStatic intercepts every call to the mocked class regardless of caller, so
+        // under the default answer Bukkit.getTag returns null, MaterialTags.replacedBy's
+        // Objects.requireNonNull throws, and MockBukkit rethrows it as
+        // IncompatiblePaperVersionException("Version Mismatch!") -- even though MockBukkit.mock()
+        // above set a live server. CALLS_REAL_METHODS lets every unstubbed method fall through
+        // to the real Bukkit class body, which reads the live server field.
+        // Note the Tag hop happens inside MockBukkit's registry population, not inside Material's
+        // own static init: Material references neither Bukkit.getTag nor org.bukkit.Tag.
         bukkitMock = mockStatic(Bukkit.class, org.mockito.Mockito.CALLS_REAL_METHODS);
         bukkitMock.when(() -> Bukkit.createInventory(any(InventoryHolder.class), eq(54), anyString()))
                 .thenAnswer(inv -> {
@@ -66,11 +77,15 @@ class BackupGUITest {
 
         // Mock XVersionUtils for cross-version glass panes
         xVersionMock = mockStatic(XVersionUtils.class);
-        // A mock stands in for the filler icon here rather than a real ItemStack: this stub's
-        // return value is never asserted on, and XVersionUtils.getColoredPlaneGlass's own
-        // production implementation is never exercised by this test (it is mocked away above).
-        // A real new ItemStack(Material.GLASS_PANE) touches the live Bukkit registry purely as a
-        // fixture artifact, which is a fixture defect, not evidence this class needs a bootstrap.
+        // The filler icon must be a mock, not a real ItemStack. This stub is assembled while the
+        // Bukkit static mock above is still open, so a real `new ItemStack(Material.GLASS_PANE)`
+        // would be constructed between when(...) and .thenReturn(...) and its own Bukkit call
+        // would be intercepted mid-stubbing, which Mockito reports as UnfinishedStubbingException.
+        // Measured: swapping this back to a real ItemStack errors all 12 tests in this class
+        // (and all 29 in BackupPreviewGUITest), every one an UnfinishedStubbingException.
+        // Nothing is lost by mocking it --
+        // the stub's return value is never asserted on, and XVersionUtils.getColoredPlaneGlass's
+        // production implementation is mocked away here regardless.
         xVersionMock.when(() -> XVersionUtils.getColoredPlaneGlass(any(Colors.class)))
                 .thenReturn(mock(ItemStack.class));
     }
