@@ -116,7 +116,7 @@ path documented as an extra row: `help` is itself an explicit `@CmdMapping(forma
 (line 228) that simply delegates to `handleHelp`, not a `BaseCommandExecutor#onCommand`
 short-circuit.
 
-**Reconciliation note — event Kind (4 handler methods against 2 `event`-Kind rows below):** this
+**Reconciliation note — event Kind (4 handler methods against 3 `event`-Kind rows below):** this
 is a deliberate, explained mismatch, not an omission. `BackupListener` carries 4
 `@EventHandler` methods; only `onPlayerDeath` and `onPlayerQuit` are catalogued as `event`-Kind
 rows in `## Auto-Backup Triggers` below. The other two (`onBackupGUIClick`, `onPreviewGUIClick`)
@@ -125,7 +125,9 @@ player-visible behaviours of their own — a player experiences "click a backup 
 browser GUI", not "an inventory-click event fired". Each is instead named, by method, in the
 `gui`-Kind row's own Feature text in `## GUI` below, so the reconciliation table's `@EventListener`
 line states the true handler-method count (4) against the row count actually attributable to the
-`event` Kind (2), with this note as the stated reason for the other two.
+`event` Kind (3), with this note as the stated reason for the other two. The third `event`-Kind row,
+`ultibackup.lifecycle.reload` in `## Lifecycle Hooks`, has no `@EventHandler` of its own: it is
+`event`-Kind because the framework's `/ul reload` drives it.
 
 ## Backup and Restore Commands
 
@@ -177,12 +179,15 @@ methods. This module's former overrides of both only logged a line, so they were
 than renamed (`UltiKits/UltiBackup#14`): it has no `onReload()` or `onUnregister()` hook, and
 prints no reload or unload line of its own. `ConfigManager#reloadConfigs` re-initialises, in place,
 the same `BackupConfig` instance the container injected into `BackupService`, and `BackupService`
-reads its getters at call time, so `/ul reload UltiBackup` changes what the next backup does. The
-row is `event`-Kind because the reload is a framework command, not one this repository maps.
+reads its getters at call time, so `/ul reload UltiBackup` (or bare `/ul reload`, which reloads every
+module) changes what the next backup does. The row is `event`-Kind because the reload is a framework
+command, not one this repository maps. `ultibackup.lifecycle.reload` supersedes
+`ultibackup.event.module-reload` (retired with `UltiKits/UltiBackup#14`; its Phase 10 verdict recorded
+the defect, not this behaviour).
 
 | ID | Feature | Kind | How to reach | Permission | Target | Tier | Manual | Source |
 |---|---|---|---|---|---|---|---|---|
-| ultibackup.lifecycle.reload | `/ul reload UltiBackup` re-reads `config/backup.yml` into the running module, so an edited `max_backups_per_player` governs the pruning that follows the next backup without a restart; the framework logs its own `Module 'UltiBackup' reloaded.` line and this module adds no reload work or line of its own. Before `UltiKits/UltiBackup#14` the module's reload override replaced the framework's reload and only logged `UltiBackup configuration reloaded!`, so an edit took effect only after a restart | event | `/ul reload UltiBackup` (framework calls `reloadSelf()`, which reloads configuration, refreshes language, runs the `@ConditionalOnConfig` drift check and logs its own per-module line; this module declares no `/backup reload` subcommand) | n/a | n/a | admin | brief | BackupService#cleanupOldBackups |
+| ultibackup.lifecycle.reload | `/ul reload UltiBackup` re-reads `config/backup.yml` into the running module, so an edited `max_backups_per_player` governs the pruning that follows the next backup without a restart; the framework logs its own `Module 'UltiBackup' reloaded.` line and this module adds no reload work or line of its own. Before `UltiKits/UltiBackup#14` the module's reload override replaced the framework's reload and only logged `UltiBackup configuration reloaded!`, so an edit took effect only after a restart | event | `/ul reload UltiBackup`, or bare `/ul reload` (framework calls `reloadSelf()`, which reloads configuration, refreshes language, runs the `@ConditionalOnConfig` drift check and logs its own per-module line; this module declares no `/backup reload` subcommand) | n/a | n/a | admin | brief | BackupService#cleanupOldBackups |
 
 ## Scheduled Tasks
 
