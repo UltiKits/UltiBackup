@@ -16,18 +16,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   UltiTools 6.3.0 also runs its `@ConditionalOnConfig` drift check at this point (this module has no
   conditional beans, so it reports nothing) and logs its own per-module reload line
   (UltiKits/UltiBackup#14).
-- Unloading this module (`/upm uninstall UltiBackup`, or server shutdown) now runs the framework's
-  command unregistration, then its listener unregistration. Previously this module's unload method
-  replaced the framework's and only logged a line, so its commands were never unregistered on any
-  unload path, and its listeners were not unregistered on `/upm uninstall` (UltiKits/UltiBackup#14).
+- After `/upm uninstall UltiBackup`, this module's commands are now really removed and its listeners
+  stop firing. Previously this module's unload method replaced the framework's and only logged a
+  line, so both stayed active until the server restarted (UltiKits/UltiBackup#14).
 - 重载本模块（`/ul reload` 或 `/ul reload UltiBackup`）现在会重新读取 `config/backup.yml` 并刷新语言文件，修改后的
   `max_backups_per_player` 等配置无需重启即可对下一次备份生效。此前本模块的重载方法替换了框架的重载方法且
   只输出一行日志，这两步都不会执行，重载报告成功却什么也没有重载。UltiTools 6.3.0 还会在此时执行
   `@ConditionalOnConfig` 漂移检查（本模块没有条件注册的 Bean，因此不会报告任何内容）并输出框架自身的模块重载日志
   （UltiKits/UltiBackup#14）。
-- 卸载本模块（`/upm uninstall UltiBackup` 或关闭服务器）现在会由框架注销命令，再注销监听器。此前本模块的
-  卸载方法替换了框架的卸载方法且只输出一行日志，因此任何卸载途径都不会注销其命令，`/upm uninstall`
-  也不会注销其监听器（UltiKits/UltiBackup#14）。
+- 执行 `/upm uninstall UltiBackup` 后，本模块的命令现在会被真正移除，其监听器也不再触发。此前本模块的卸载
+  方法替换了框架的卸载方法且只输出一行日志，因此两者都会一直保持生效，直到服务器重启
+  （UltiKits/UltiBackup#14）。
 
 ### Removed
 
