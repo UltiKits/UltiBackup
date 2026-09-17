@@ -25,16 +25,6 @@ public class UltiBackup extends UltiToolsPlugin {
     }
 
     @Override
-    public void unregisterSelf() {
-        getLogger().info("UltiBackup has been disabled!");
-    }
-
-    @Override
-    public void reloadSelf() {
-        getLogger().info("UltiBackup configuration reloaded!");
-    }
-
-    @Override
     public List<String> supported() {
         return Arrays.asList("zh", "en");
     }

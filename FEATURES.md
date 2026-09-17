@@ -170,11 +170,19 @@ player-visible events).
 | ultibackup.event.auto-backup-on-death | Automatically create a backup (reason `DEATH`) for a player who dies, before death drops are processed, provided the player holds `ultibackup.auto` and `auto_backup.on_death` is enabled | event | die while holding `ultibackup.auto` and `auto_backup.on_death: true` | n/a | n/a | internal | brief | BackupListener#onPlayerDeath |
 | ultibackup.event.auto-backup-on-quit | Automatically create a backup (reason `QUIT`) for a player who disconnects, provided the player holds `ultibackup.auto` and `auto_backup.on_quit` is enabled | event | quit the server while holding `ultibackup.auto` and `auto_backup.on_quit: true` | n/a | n/a | internal | brief | BackupListener#onPlayerQuit |
 
-## Module Reload
+## Lifecycle Hooks
+
+As of UltiTools 6.3.0 the framework's `reloadSelf()` and `unregisterSelf()` are `final` template
+methods. This module's former overrides of both only logged a line, so they were deleted rather
+than renamed (`UltiKits/UltiBackup#14`): it has no `onReload()` or `onUnregister()` hook, and
+prints no reload or unload line of its own. `ConfigManager#reloadConfigs` re-initialises, in place,
+the same `BackupConfig` instance the container injected into `BackupService`, and `BackupService`
+reads its getters at call time, so `/ul reload UltiBackup` changes what the next backup does. The
+row is `event`-Kind because the reload is a framework command, not one this repository maps.
 
 | ID | Feature | Kind | How to reach | Permission | Target | Tier | Manual | Source |
 |---|---|---|---|---|---|---|---|---|
-| ultibackup.event.module-reload | Intended to reload this module's configuration from disk when the framework reloads it; in reality does nothing but log a success line — `UltiBackup#reloadSelf()` overrides the framework's `reloadSelf()` WITHOUT calling `super.reloadSelf()`, so `BackupConfig` is never re-read and the printed success message describes work that never happened. A known product defect, `UltiKits/UltiBackup#14`, not fixed here per this phase's zero-new-code rule | event | `/ul reload` or `/ul reload UltiBackup` (framework-level; this module declares no `/backup reload` subcommand of its own) | n/a | n/a | admin | brief | UltiBackup#reloadSelf |
+| ultibackup.lifecycle.reload | `/ul reload UltiBackup` re-reads `config/backup.yml` into the running module, so an edited `max_backups_per_player` governs the pruning that follows the next backup without a restart; the framework logs its own `Module 'UltiBackup' reloaded.` line and this module adds no reload work or line of its own. Before `UltiKits/UltiBackup#14` the module's reload override replaced the framework's reload and only logged `UltiBackup configuration reloaded!`, so an edit took effect only after a restart | event | `/ul reload UltiBackup` (framework calls `reloadSelf()`, which reloads configuration, refreshes language, runs the `@ConditionalOnConfig` drift check and logs its own per-module line; this module declares no `/backup reload` subcommand) | n/a | n/a | admin | brief | BackupService#cleanupOldBackups |
 
 ## Scheduled Tasks
 
