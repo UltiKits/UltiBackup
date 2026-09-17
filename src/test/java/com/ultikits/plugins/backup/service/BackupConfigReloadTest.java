@@ -34,6 +34,13 @@ import static org.mockito.Mockito.*;
  * injected with, which is what {@code /ul reload UltiBackup} does on UltiTools 6.3.0
  * ({@code ConfigManager#reloadConfigs} calls {@code init(plugin)} again on the same instance).
  * Backs the {@code ultibackup.lifecycle.reload} checklist row (UltiKits/UltiBackup#14).
+ * <p>
+ * This test calls {@code init(plugin)} directly rather than the framework's reload entry point, so it
+ * relies on two framework facts it does not itself assert: {@code PluginManager} registers the
+ * {@code ConfigManager}'s own config instances as container singletons, and
+ * {@code ConfigManager#reloadConfigs} re-initialises those instances rather than replacing them. A
+ * framework change that re-instantiates config beans on reload invalidates this test; the checklist
+ * row remains the end-to-end proof.
  */
 @DisplayName("BackupService observes an in-place BackupConfig reload (UltiKits/UltiBackup#14)")
 class BackupConfigReloadTest {
