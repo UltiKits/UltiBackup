@@ -4,6 +4,8 @@ import com.ultikits.ultitools.interfaces.impl.logger.PluginLogger;
 
 import org.junit.jupiter.api.*;
 
+import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
@@ -27,29 +29,21 @@ class UltiBackupTest {
     }
 
     @Test
-    @DisplayName("unregisterSelf should log message")
-    void unregisterSelf() throws Exception {
-        UltiBackup plugin = mock(UltiBackup.class);
-        PluginLogger logger = mock(PluginLogger.class);
-        when(plugin.getLogger()).thenReturn(logger);
-        doCallRealMethod().when(plugin).unregisterSelf();
-
-        plugin.unregisterSelf();
-
-        verify(logger).info("UltiBackup has been disabled!");
+    @DisplayName("declares no override of the framework's final unregisterSelf() (UltiKits/UltiBackup#14)")
+    void declaresNoUnregisterSelfOverride() {
+        assertThat(declaredMethodNames()).doesNotContain("unregisterSelf");
     }
 
     @Test
-    @DisplayName("reloadSelf should log message")
-    void reloadSelf() throws Exception {
-        UltiBackup plugin = mock(UltiBackup.class);
-        PluginLogger logger = mock(PluginLogger.class);
-        when(plugin.getLogger()).thenReturn(logger);
-        doCallRealMethod().when(plugin).reloadSelf();
+    @DisplayName("declares no override of the framework's final reloadSelf() (UltiKits/UltiBackup#14)")
+    void declaresNoReloadSelfOverride() {
+        assertThat(declaredMethodNames()).doesNotContain("reloadSelf");
+    }
 
-        plugin.reloadSelf();
-
-        verify(logger).info("UltiBackup configuration reloaded!");
+    @Test
+    @DisplayName("declares no onUnregister()/onReload() hook: the log-only overrides are deleted, not renamed")
+    void declaresNoLifecycleHooks() {
+        assertThat(declaredMethodNames()).doesNotContain("onUnregister", "onReload");
     }
 
     @Test
@@ -61,5 +55,13 @@ class UltiBackupTest {
         List<String> langs = plugin.supported();
 
         assertThat(langs).containsExactly("zh", "en");
+    }
+
+    private static List<String> declaredMethodNames() {
+        List<String> names = new ArrayList<>();
+        for (Method method : UltiBackup.class.getDeclaredMethods()) {
+            names.add(method.getName());
+        }
+        return names;
     }
 }
