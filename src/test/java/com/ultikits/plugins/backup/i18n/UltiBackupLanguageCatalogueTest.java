@@ -518,6 +518,22 @@ class UltiBackupLanguageCatalogueTest {
         }
 
         @Test
+        @DisplayName("a call right after a lambda arrow is a call, even with a less-than sign earlier")
+        void callAfterLambdaArrow() {
+            SourceFile f = source("void m(int x) { if (x < 3) { Runnable r = () -> i18n(\"after.arrow\"); } }\n"
+                    + "String i18n(String key) { return plugin.i18n(key); }");
+            assertThat(f.sites).extracting(s -> s.literalKey).contains("after.arrow");
+        }
+
+        @Test
+        @DisplayName("a wrapper that reassigns its key parameter before forwarding it is not a pass-through")
+        void reassigningWrapperIsDynamic() {
+            SourceFile f = source("String i18n(String key) { key = \"p.\" + key; return plugin.i18n(key); }");
+            assertThat(f.sites).hasSize(1);
+            assertThat(f.sites.get(0).passThrough).isFalse();
+        }
+
+        @Test
         @DisplayName("an unlisted computed key fails; a listed one passes; a stale listing fails")
         void dynamicSitesMustBeEnumerated() {
             List<SourceFile> files = Collections.singletonList(
