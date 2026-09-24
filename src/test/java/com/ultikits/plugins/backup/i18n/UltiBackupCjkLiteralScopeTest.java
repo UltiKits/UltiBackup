@@ -402,6 +402,15 @@ class UltiBackupCjkLiteralScopeTest {
         }
     }
 
+    /** A compiled class carrying the framework's {@code @ConfigEntry}, for {@code skipNeedsTheFrameworkAnnotation}. */
+    static final class ConfigCommentFixture {
+        @com.ultikits.ultitools.annotations.ConfigEntry(path = "a", comment = "\u4e2d\u6587")
+        private String a;
+
+        private ConfigCommentFixture() {
+        }
+    }
+
     @Nested
     @DisplayName("@ConfigEntry(comment = ...) is skipped, and nothing else is (maintainer ruling 2026-09-24)")
     class ConfigEntryComment {
@@ -427,6 +436,18 @@ class UltiBackupCjkLiteralScopeTest {
         void otherAnnotationCommentStillCounts() {
             assertThat(check("@ConfigEntity(comment = \"\u4e2d\") @Other(comment = \"\u6587\") private String s;"))
                     .hasSize(2);
+        }
+
+        @Test
+        @DisplayName("the skip holds only for text the framework's own @ConfigEntry carries (Codex, UltiBackup#22)")
+        void skipNeedsTheFrameworkAnnotation() {
+            SourceFile f = SourceFile.of("src/main/java/Sample.java", "class Sample {\n"
+                    + "@ConfigEntry(path = \"a\", comment = \"\u4e2d\u6587\") String a;\n"
+                    + "@other.ConfigEntry(comment = \"\u6ce8\u91ca\") String b;\n}\n");
+            I18nSourceScanner.confirmConfigComments(f,
+                    I18nSourceScanner.frameworkConfigComments(ConfigCommentFixture.class));
+            assertThat(violations(Collections.singletonList(f), parseExemptions(Collections.<String>emptyList())))
+                    .singleElement().asString().contains("\"\u6ce8\u91ca\"");
         }
 
         @Test

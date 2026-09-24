@@ -314,6 +314,15 @@ final class I18nSourceScanner {
         return scan;
     }
 
+    /** Not yet implemented: every syntactic {@code @ConfigEntry(comment = ...)} literal stays skipped. */
+    static void confirmConfigComments(SourceFile file, List<String> comments) {
+    }
+
+    /** Not yet implemented. */
+    static List<String> frameworkConfigComments(Class<?> type) {
+        return Collections.emptyList();
+    }
+
     static SourceFile parse(final String path, final String source) {
         JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
         if (javac == null) {
