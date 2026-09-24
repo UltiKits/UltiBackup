@@ -316,7 +316,14 @@ class UltiBackupLanguageCatalogueTest {
      * <p>
      * The bare {@code {}} marker SLF4J and {@code PluginLogger} fill in order is all one kind, so only
      * their number counts. Named tokens ({@code {PLAYER}}, {@code {0}}, {@code %player_name%}) are kept
-     * as written. {@code %%} and {@code %n} take no argument and are left out.
+     * as written.
+     * <p>
+     * Every {@code %} in the text belongs to exactly one token: a named token, a specifier, {@code %%},
+     * {@code %n}, or, when it starts none of these, a lone {@code %} that counts as itself. So no
+     * percent sign can be dropped or added without changing the list. That settles the cases no single
+     * reading can: a one-character {@code %x%} is read as {@code Formatter} reads it, {@code %x} then a
+     * lone {@code %}, because a one-character named token cannot be told apart from two adjacent
+     * specifiers such as {@code %s%s}. A dropped closing {@code %} still changes the count.
      */
     static List<String> placeholders(String text) {
         List<String> found = new ArrayList<>();
@@ -329,7 +336,8 @@ class UltiBackupLanguageCatalogueTest {
                 continue;
             }
             if (m.group("conversion") == null) {
-                continue; // %% or %n
+                found.add(m.group()); // %%, %n, or a lone %
+                continue;
             }
             String flags = m.group("flags");
             String argument;
@@ -357,14 +365,15 @@ class UltiBackupLanguageCatalogueTest {
      * token and not {@code %o} followed by prose. A letter right after the conversion does not end it
      * early: {@code Formatter} reads {@code "%dh"} as {@code %d} then {@code h}, so the pattern does too.
      * <p>
-     * One deliberate limit: the space flag is not matched, so prose such as "100% of" is not read as
-     * the specifier {@code "% o"}. A translation that drops a space-flagged specifier such as
-     * {@code "% d"} is therefore not reported. No module catalogue uses one (measured 2026-09-24:
-     * 0 of 3,064 entries across the fifteen module repositories).
+     * The space flag is not matched, so prose such as "100% of" is not read as the specifier
+     * {@code "% o"}; its {@code %} is a lone {@code %} instead. A dropped space-flagged specifier such as
+     * {@code "% d"} therefore still changes the count of lone {@code %}. What is not reported is one
+     * space-flagged conversion changed into another. No module catalogue uses a space-flagged specifier
+     * (measured 2026-09-24: 0 of 3,064 entries across the fifteen module repositories).
      */
     private static final Pattern PLACEHOLDER = Pattern.compile("(?<named>\\{[A-Za-z0-9_]*}|%[A-Za-z_][A-Za-z0-9_]+%)"
             + "|%%|%n|%(?:(?<index>\\d+)\\$)?(?<flags>[-#+0,(<]*)"
-            + "(?<conversion>\\d*(?:\\.\\d+)?(?:[tT][a-zA-Z]|[bBhHsScCdoxXeEfgGaA]))");
+            + "(?<conversion>\\d*(?:\\.\\d+)?(?:[tT][a-zA-Z]|[bBhHsScCdoxXeEfgGaA]))|%");
 
     static List<String> placeholderMismatches(List<Catalogue> cats) {
         List<String> problems = new ArrayList<>();
