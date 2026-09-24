@@ -210,14 +210,12 @@ keys or UltiChat's five shipped config files, `BackupConfig`'s file is generated
 these `@ConfigEntry` field defaults the first time the module boots, with no packaged seed
 resource to diff against.
 
-**One key is declared and validated but its own display method never reads it correctly:**
-`getReasonDisplay()` (the method every `backup.reason.*`-consuming row would call) returns the
-raw, untranslated reason constant instead of looking up one of the six `backup.reason.*` language
-keys — a known product defect, `UltiKits/UltiBackup#15`, not fixed here per this phase's
-zero-new-code rule. This is a language-catalogue defect, not a `@ConfigEntry` defect, so it has
-no row in this section; it is called out here because every config row above documents inclusion
-toggles that feed backup CONTENT, and this is the one place a reader might expect the reason
-label to be config-adjacent and find it is not.
+**The six `backup.reason.*` language keys are not configuration.** They label a backup's stored
+reason in `/backup list`, the backup browser's lore and the backup preview's info panel, in the
+server's `language` (`BackupMetadata#getReasonKey`, `#getReasonDisplay`). They are called out here
+because every config row above documents inclusion toggles that feed backup CONTENT, and this is the
+one place a reader might expect the reason label to be config-adjacent and find it is not. Before
+`UltiKits/UltiBackup#15` the display method returned the raw constant, so these keys were never used.
 
 | ID | Feature | Kind | How to reach | Permission | Target | Tier | Manual | Source |
 |---|---|---|---|---|---|---|---|---|

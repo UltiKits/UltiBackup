@@ -150,7 +150,7 @@ public class BackupPreviewGUI implements InventoryHolder {
             infoMeta.setDisplayName(ChatColor.GOLD + i18n("backup.preview.info"));
             List<String> lore = new ArrayList<>();
             lore.add(i18n("backup.preview.info_time").replace("{TIME}", metadata.getFormattedTime()));
-            lore.add(i18n("backup.preview.info_reason").replace("{REASON}", metadata.getReasonDisplay()));
+            lore.add(i18n("backup.preview.info_reason").replace("{REASON}", metadata.getReasonDisplay(plugin)));
             lore.add(i18n("backup.preview.info_level").replace("{LEVEL}", String.valueOf(content.getExpLevel())));
             lore.add(i18n("backup.preview.info_world").replace("{WORLD}", metadata.getWorldName()));
             infoMeta.setLore(lore);
