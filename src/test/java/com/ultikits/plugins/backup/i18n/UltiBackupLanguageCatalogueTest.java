@@ -289,7 +289,8 @@ class UltiBackupLanguageCatalogueTest {
     /**
      * The placeholders of {@code text}: the order-sensitive ones (ordinary {@code String.format}
      * specifiers and the bare {@code {}} marker) in the order written, then {@code "|"}, then the
-     * ones that may move ({@code %2$s}, {@code {NAME}}, {@code {0}}) sorted.
+     * ones that may move ({@code %2$s}, {@code %<s}, {@code {NAME}}, {@code {0}}, {@code %NAME%})
+     * sorted. {@code %%} and {@code %n} take no argument and are left out.
      */
     static List<String> placeholders(String text) {
         List<String> inOrder = new ArrayList<>();
@@ -297,13 +298,15 @@ class UltiBackupLanguageCatalogueTest {
         Matcher m = PLACEHOLDER.matcher(text == null ? "" : text);
         while (m.find()) {
             String token = m.group();
-            if (token.equals("%%")) {
+            if (token.equals("%%") || token.equals("%n")) {
                 continue;
             }
             // String.format fills an ordinary specifier, and SLF4J / PluginLogger fill {}, strictly in
             // order, so their order must match between languages (a swapped %s/%d throws at run time).
-            // An indexed specifier (%2$s) or a named token ({PLAYER}, {0}) may move.
-            if (token.equals("{}") || (token.startsWith("%") && !token.contains("$"))) {
+            // An indexed specifier (%2$s), a relative one (%<s) or a named token ({PLAYER}, {0},
+            // %player_name%) may move.
+            boolean named = token.startsWith("{") ? !token.equals("{}") : token.endsWith("%");
+            if (!named && !token.contains("$") && !token.contains("<")) {
                 inOrder.add(token);
             } else {
                 anyOrder.add(token);
@@ -318,14 +321,21 @@ class UltiBackupLanguageCatalogueTest {
 
     /**
      * {@code {NAME}}/{@code {0}} tokens, the bare {@code {}} argument marker SLF4J and the framework's
-     * {@code PluginLogger} fill in order, {@code %%}, and {@code String.format} specifiers with a
-     * {@code s}, {@code d}, {@code f} or {@code x} conversion. A letter right after the conversion does
-     * not end it early: {@code java.util.Formatter} reads {@code "%dh"} as {@code %d} then {@code h}, so
-     * the pattern does too. Prose such as "100% of" or "50%off" is still not a specifier -- a space is
-     * not one of the flags matched here, and {@code o} is not one of the conversions.
+     * {@code PluginLogger} fill in order, {@code %NAME%} tokens a caller replaces by name
+     * ({@code %player_name%}), {@code %%}, {@code %n}, and every {@code java.util.Formatter} specifier
+     * that takes an argument: {@code %[index$][flags][width][.precision]conversion} with any general,
+     * character, integral or floating-point conversion, or the {@code t}/{@code T} date/time prefix
+     * and its suffix letter. A {@code %NAME%} token is tried first, so {@code %online%} is one named
+     * token and not {@code %o} followed by prose. A letter right after the conversion does not end it
+     * early: {@code Formatter} reads {@code "%dh"} as {@code %d} then {@code h}, so the pattern does too.
+     * <p>
+     * One deliberate limit: the space flag is not matched, so prose such as "100% of" is not read as
+     * the specifier {@code "% o"}. A translation that drops a space-flagged specifier such as
+     * {@code "% d"} is therefore not reported. No module catalogue uses one (measured 2026-09-24:
+     * 0 of 3,064 entries across the fifteen module repositories).
      */
-    private static final Pattern PLACEHOLDER =
-            Pattern.compile("\\{[A-Za-z0-9_]*}|%%|%(\\d+\\$)?[-#+0,(]*\\d*(\\.\\d+)?[sdfx]");
+    private static final Pattern PLACEHOLDER = Pattern.compile("\\{[A-Za-z0-9_]*}|%[A-Za-z_][A-Za-z0-9_]+%|%%|%n"
+            + "|%(\\d+\\$)?[-#+0,(<]*\\d*(\\.\\d+)?([tT][a-zA-Z]|[bBhHsScCdoxXeEfgGaA])");
 
     static List<String> placeholderMismatches(List<Catalogue> cats) {
         List<String> problems = new ArrayList<>();
