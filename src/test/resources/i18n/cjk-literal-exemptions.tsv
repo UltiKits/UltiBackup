@@ -1,0 +1,4 @@
+# Language guard 2 exemptions: Chinese text in a src/main/java literal that is deliberately not routed
+# through the language catalogue. One line per literal, three tab-separated fields:
+#   path (relative to the module root) <TAB> the literal exactly as written between its quotes <TAB> reason
+# Every line needs a reason. A line that no longer matches a literal fails the build (UltiBackupCjkLiteralScopeTest).
