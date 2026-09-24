@@ -766,6 +766,15 @@ class UltiBackupLanguageCatalogueTest {
         }
 
         @Test
+        @DisplayName("a logger argument marker {} that a translation drops is reported")
+        void loggerMarkerDroppedIsReported() throws IOException {
+            assertThat(placeholderMismatches(Arrays.asList(
+                    yaml("en", "a: \"Loaded {} locks in {}s\"\nb: \"{} of {}\"\n"),
+                    yaml("zh", "a: \"\u5df2\u52a0\u8f7d {} \u4e2a\u9501\"\nb: \"{} / {}\"\n"))))
+                    .singleElement().asString().startsWith("\"a\"");
+        }
+
+        @Test
         @DisplayName("placeholders are compared between every pair of languages, not only against the first")
         void placeholdersComparedPairwise() throws IOException {
             List<String> problems = placeholderMismatches(Arrays.asList(
