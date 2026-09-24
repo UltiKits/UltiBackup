@@ -31,6 +31,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -138,6 +140,18 @@ class UltiBackupLanguageCatalogueTest {
         assertThat(chineseKeys(sources, catalogues)).isEmpty();
     }
 
+    @Test
+    @DisplayName("the English catalogue holds no Chinese text")
+    void englishCatalogueHoldsNoChineseText() {
+        assertThat(chineseTextInEnglish(catalogues)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("every key has the same placeholders in every language")
+    void placeholdersMatchAcrossLanguages() {
+        assertThat(placeholderMismatches(catalogues)).isEmpty();
+    }
+
     // ================================================================== the checks
 
     static List<String> missingLiteralKeys(List<SourceFile> files, List<Catalogue> cats) {
@@ -240,6 +254,59 @@ class UltiBackupLanguageCatalogueTest {
             for (String key : c.entries.keySet()) {
                 if (I18nSourceScanner.containsCjk(key)) {
                     problems.add(c.fileName + " declares a Chinese key \"" + key + "\"");
+                }
+            }
+        }
+        return problems;
+    }
+
+    static List<String> chineseTextInEnglish(List<Catalogue> cats) {
+        List<String> problems = new ArrayList<>();
+        for (Catalogue c : cats) {
+            if (!c.code.equals("en")) {
+                continue;
+            }
+            for (Map.Entry<String, String> e : c.entries.entrySet()) {
+                if (e.getValue() != null && I18nSourceScanner.containsCjk(e.getValue())) {
+                    problems.add(c.fileName + " gives \"" + e.getKey() + "\" Chinese text: \"" + e.getValue() + "\"");
+                }
+            }
+        }
+        return problems;
+    }
+
+    /** {@code {NAME}} / {@code {0}} tokens and {@code String.format} specifiers, sorted. */
+    static List<String> placeholders(String text) {
+        List<String> found = new ArrayList<>();
+        Matcher m = PLACEHOLDER.matcher(text == null ? "" : text);
+        while (m.find()) {
+            if (!m.group().equals("%%")) {
+                found.add(m.group());
+            }
+        }
+        Collections.sort(found);
+        return found;
+    }
+
+    private static final Pattern PLACEHOLDER =
+            Pattern.compile("\\{[A-Za-z0-9_]+}|%%|%(\\d+\\$)?[-#+ 0,(]*\\d*(\\.\\d+)?[a-zA-Z]");
+
+    static List<String> placeholderMismatches(List<Catalogue> cats) {
+        List<String> problems = new ArrayList<>();
+        if (cats.isEmpty()) {
+            return problems;
+        }
+        Catalogue first = cats.get(0);
+        for (Catalogue other : cats.subList(1, cats.size())) {
+            for (String key : new TreeSet<>(first.entries.keySet())) {
+                if (!other.entries.containsKey(key)) {
+                    continue;
+                }
+                List<String> a = placeholders(first.entries.get(key));
+                List<String> b = placeholders(other.entries.get(key));
+                if (!a.equals(b)) {
+                    problems.add("\"" + key + "\" has placeholders " + a + " in " + first.fileName + " but " + b
+                            + " in " + other.fileName);
                 }
             }
         }
@@ -596,6 +663,25 @@ class UltiBackupLanguageCatalogueTest {
             List<SourceFile> files = Collections.singletonList(source("void m() { plugin.i18n(\"\\u4e2d\\u6587\"); }"));
             Catalogue zh = yaml("zh", "\"\u4e2d\u6587\": \"x\"\n");
             assertThat(chineseKeys(files, Collections.singletonList(zh))).hasSize(2);
+        }
+
+        @Test
+        @DisplayName("Chinese text in the English catalogue is reported; in the Chinese one it is not")
+        void chineseTextInEnglishIsReported() throws IOException {
+            List<String> problems = chineseTextInEnglish(Arrays.asList(
+                    yaml("en", "a: \"ok\"\nb: \"\u4e2d\"\n"), yaml("zh", "a: \"\u4e2d\"\n")));
+            assertThat(problems).singleElement().asString().contains("lang/en.yml").contains("\"b\"");
+        }
+
+        @Test
+        @DisplayName("a placeholder a translation drops or renames is reported")
+        void placeholderMismatchIsReported() throws IOException {
+            List<String> problems = placeholderMismatches(Arrays.asList(
+                    yaml("en", "a: \"{PLAYER} has %d of %s, 100%%\"\nb: \"{X}\"\nc: \"{0}\"\n"),
+                    yaml("zh", "a: \"%s %d {PLAYER} 100%%\"\nb: \"{Y}\"\nc: \"none\"\n")));
+            assertThat(problems).hasSize(2);
+            assertThat(problems.get(0)).startsWith("\"b\"");
+            assertThat(problems.get(1)).startsWith("\"c\"");
         }
 
         @Test
