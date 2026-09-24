@@ -924,6 +924,21 @@ class UltiBackupLanguageCatalogueTest {
         }
 
         @Test
+        @DisplayName("a relative specifier %<s stays bound to the argument before it (Codex, UltiBackup#22)")
+        void relativeSpecifierKeepsItsArgument() throws IOException {
+            List<String> problems = placeholderMismatches(Arrays.asList(
+                    yaml("en", "lead: \"%s and %<s\"\nmoved: \"%s of %d, %<d\"\nsame: \"%s then %<s\"\n"),
+                    yaml("zh", "lead: \"%<s \u548c %s\"\nmoved: \"%s \u7684 %<d\uff0c%d\"\n"
+                            + "same: \"%1$s \u7136\u540e %1$s\"\n")));
+            // lead: zh's %<s has no argument before it (MissingFormatArgumentException at run time).
+            // moved: zh's %<d re-uses %s's argument, so it formats a String with %d and throws.
+            // same: %1$s twice binds the same argument as %s then %<s, so it is a correct translation.
+            assertThat(problems).hasSize(2);
+            assertThat(problems.get(0)).startsWith("\"lead\"");
+            assertThat(problems.get(1)).startsWith("\"moved\"");
+        }
+
+        @Test
         @DisplayName("a logger argument marker {} that a translation drops is reported")
         void loggerMarkerDroppedIsReported() throws IOException {
             assertThat(placeholderMismatches(Arrays.asList(
