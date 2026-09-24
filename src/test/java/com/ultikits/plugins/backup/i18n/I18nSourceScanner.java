@@ -42,6 +42,7 @@ import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Stream;
 
 /**
@@ -161,6 +162,14 @@ final class I18nSourceScanner {
         }
     }
 
+    /** What {@link #suggestHintSites} found: the hint sites, and every suggest value it saw. */
+    static final class SuggestScan {
+        /** One file per executor that has a hint site, named after its compiled class. */
+        final List<SourceFile> hints = new ArrayList<>();
+        /** Each suggest value seen, as its declaring method and parameter index. */
+        final Set<String> seen = new TreeSet<>();
+    }
+
     /** One parsed {@code .java} file. {@code path} is relative to the module root, with {@code /}. */
     static final class SourceFile {
         final String path;
@@ -206,6 +215,11 @@ final class I18nSourceScanner {
         }
         resolveSuggestHints(result);
         return result;
+    }
+
+    /** Not yet implemented: suggest values are still resolved from source by {@code resolveSuggestHints}. */
+    static SuggestScan suggestHintSites(List<Class<?>> classes) {
+        return new SuggestScan();
     }
 
     /**

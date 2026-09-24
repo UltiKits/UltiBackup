@@ -5,6 +5,8 @@ import com.ultikits.plugins.backup.i18n.I18nSourceScanner.KeySite;
 import com.ultikits.plugins.backup.i18n.I18nSourceScanner.SiteKind;
 import com.ultikits.plugins.backup.i18n.I18nSourceScanner.SourceFile;
 import com.ultikits.ultitools.abstracts.UltiToolsPlugin;
+import com.ultikits.ultitools.annotations.command.CmdParam;
+import com.ultikits.ultitools.annotations.command.CmdSuggest;
 import com.ultikits.ultitools.entities.Language;
 
 import org.junit.jupiter.api.BeforeAll;
@@ -573,6 +575,59 @@ class UltiBackupLanguageCatalogueTest {
         }
     }
 
+    /** Compiled executors for the {@code @CmdParam(suggest = ...)} tests; the framework's lookup runs on these. */
+    static final class SuggestFixtures {
+        static final String HINT = "backup.hint." + "constant";
+
+        private SuggestFixtures() {
+        }
+
+        abstract static class Base {
+            public List<String> inherited() {
+                return Collections.emptyList();
+            }
+        }
+
+        static final class Provider {
+            public static List<String> fromSuggestClass() {
+                return Collections.emptyList();
+            }
+        }
+
+        static final class Unrelated {
+            public List<String> elsewhere() {
+                return Collections.emptyList();
+            }
+        }
+
+        @CmdSuggest(Provider.class)
+        static class Executor extends Base {
+            public void run(@CmdParam(value = "a", suggest = "backup.hint.literal") String a,
+                            @CmdParam(value = "b", suggest = HINT) String b,
+                            @CmdParam(value = "c", suggest = "own") String c,
+                            @CmdParam(value = "d", suggest = "inherited()") String d,
+                            @CmdParam(value = "e", suggest = "fromSuggestClass") String e,
+                            @CmdParam(value = "f", suggest = "elsewhere") String f,
+                            @CmdParam("g") String g) {
+            }
+
+            public List<String> own() {
+                return Collections.emptyList();
+            }
+        }
+
+        static class Exploding {
+            static final Object STATE = explode();
+
+            static Object explode() {
+                throw new IllegalStateException("static initialiser failed");
+            }
+
+            public void run(@CmdParam(value = "p", suggest = "anything") String p) {
+            }
+        }
+    }
+
     @Nested
     @DisplayName("key sites")
     class Sites {
@@ -656,6 +711,36 @@ class UltiBackupLanguageCatalogueTest {
                     + " public String apply(String key) { return plugin.i18n(key); } }.apply(\"x.\" + suffix); }");
             assertThat(f.sites).hasSize(1);
             assertThat(f.sites.get(0).passThrough).isFalse();
+        }
+
+        @Test
+        @DisplayName("@CmdParam(suggest = ...) is resolved on the compiled executor by the framework's own lookup (Codex, UltiBackup#22)")
+        void suggestResolvedByTheFrameworkLookup() {
+            I18nSourceScanner.SuggestScan scan = I18nSourceScanner.suggestHintSites(Arrays.<Class<?>>asList(
+                    SuggestFixtures.Executor.class, SuggestFixtures.Base.class, SuggestFixtures.Provider.class,
+                    SuggestFixtures.Unrelated.class));
+            List<String> keys = new ArrayList<>();
+            for (SourceFile f : scan.hints) {
+                for (KeySite s : f.sites) {
+                    assertThat(s.kind).isEqualTo(SiteKind.SUGGEST_HINT);
+                    keys.add(s.literalKey);
+                }
+            }
+            // A literal, a compile-time constant, and a name only an unrelated class declares are all shown
+            // as hints; a method on the executor, on its superclass or on its @CmdSuggest class is not.
+            assertThat(keys).containsExactlyInAnyOrder("backup.hint.literal", "backup.hint.constant", "elsewhere");
+            assertThat(scan.seen).hasSize(6);
+        }
+
+        @Test
+        @DisplayName("an executor the framework's lookup cannot run on fails the scan instead of passing it")
+        void unresolvableExecutorFailsClosed() {
+            I18nSourceScanner.SuggestScan scan = I18nSourceScanner.suggestHintSites(
+                    Collections.<Class<?>>singletonList(SuggestFixtures.Exploding.class));
+            assertThat(scan.hints).singleElement().satisfies(f -> assertThat(f.sites).singleElement().satisfies(s -> {
+                assertThat(s.literalKey).isNull();
+                assertThat(s.expression).contains("anything").contains("cannot resolve");
+            }));
         }
 
         @Test
