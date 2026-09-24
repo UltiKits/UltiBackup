@@ -1,9 +1,7 @@
 package com.ultikits.plugins.backup.i18n;
 
-import com.ultikits.plugins.backup.i18n.I18nSourceScanner.KeySite;
-import com.ultikits.plugins.backup.i18n.I18nSourceScanner.Kind;
+import com.ultikits.plugins.backup.i18n.I18nSourceScanner.Literal;
 import com.ultikits.plugins.backup.i18n.I18nSourceScanner.SourceFile;
-import com.ultikits.plugins.backup.i18n.I18nSourceScanner.Token;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -16,9 +14,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -30,7 +26,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Detection contract, the same as the framework's {@code .github/scripts/check-cjk-scope.sh}: the
  * CJK Unified Ideographs block, U+4E00 through U+9FFF, and nothing wider. Unlike that script, this
  * guard is about literals, not comments: comments never count, and every string, character and
- * text-block literal counts after its Unicode and escape sequences are decoded.
+ * text-block literal counts after its Unicode and escape sequences are decoded. The literals come
+ * from {@code javac}'s own syntax tree ({@link I18nSourceScanner}), not from a pattern match.
  * <p>
  * Exemption file format: one line per literal, {@code path<TAB>exact literal<TAB>reason}. The path
  * is relative to the module root; the literal is the text between the quotes exactly as written in
@@ -64,13 +61,9 @@ class UltiBackupCjkLiteralScopeTest {
         assertThat(sources).isNotEmpty();
         int literals = 0;
         for (SourceFile f : sources) {
-            for (Token t : f.tokens) {
-                if (t.kind == Kind.STRING) {
-                    literals++;
-                }
-            }
+            literals += f.literals.size();
         }
-        assertThat(literals).as("string literals seen").isPositive();
+        assertThat(literals).as("literals seen").isPositive();
     }
 
     @Test
@@ -101,8 +94,8 @@ class UltiBackupCjkLiteralScopeTest {
             this.reason = reason;
         }
 
-        boolean matches(String filePath, Token token) {
-            return path.equals(filePath) && literal.equals(token.raw);
+        boolean matches(String filePath, Literal l) {
+            return path.equals(filePath) && literal.equals(l.raw);
         }
     }
 
@@ -142,10 +135,8 @@ class UltiBackupCjkLiteralScopeTest {
         for (Exemption e : parseExemptions(lines)) {
             boolean matched = false;
             for (SourceFile f : files) {
-                for (Token t : f.tokens) {
-                    if ((t.kind == Kind.STRING || t.kind == Kind.CHAR) && e.matches(f.path, t)) {
-                        matched = true;
-                    }
+                for (Literal l : f.literals) {
+                    matched |= e.matches(f.path, l);
                 }
             }
             if (!matched) {
@@ -159,24 +150,16 @@ class UltiBackupCjkLiteralScopeTest {
     static List<String> violations(List<SourceFile> files, List<Exemption> exemptions) {
         List<String> problems = new ArrayList<>();
         for (SourceFile f : files) {
-            Set<Integer> keyLiterals = new HashSet<>();
-            for (KeySite s : f.sites) {
-                if (s.literalTokenIndex >= 0) {
-                    keyLiterals.add(s.literalTokenIndex);
-                }
-            }
-            for (int i = 0; i < f.tokens.size(); i++) {
-                Token t = f.tokens.get(i);
-                if ((t.kind != Kind.STRING && t.kind != Kind.CHAR) || !I18nSourceScanner.containsCjk(t.value)
-                        || keyLiterals.contains(i)) {
+            for (Literal l : f.literals) {
+                if (l.key || !I18nSourceScanner.containsCjk(l.value)) {
                     continue;
                 }
                 boolean exempt = false;
                 for (Exemption e : exemptions) {
-                    exempt |= e.matches(f.path, t);
+                    exempt |= e.matches(f.path, l);
                 }
                 if (!exempt) {
-                    problems.add(f.path + ":" + t.line + " has Chinese text outside i18n(): \"" + t.raw + "\"");
+                    problems.add(f.path + ":" + l.line + " has Chinese text outside i18n(): \"" + l.raw + "\"");
                 }
             }
         }
@@ -194,13 +177,13 @@ class UltiBackupCjkLiteralScopeTest {
         return violations(Collections.singletonList(f), parseExemptions(exemptionFileLines));
     }
 
-    private static List<Token> lex(String source) {
-        return I18nSourceScanner.lex(source);
+    private static List<Literal> literals(String body) {
+        return SourceFile.of("src/main/java/Sample.java", "class Sample {\n" + body + "\n}\n").literals;
     }
 
     @Nested
-    @DisplayName("lexer")
-    class Lexer {
+    @DisplayName("reading the source")
+    class Reading {
 
         @Test
         @DisplayName("Chinese in a line comment and a block comment does not count")
@@ -230,9 +213,8 @@ class UltiBackupCjkLiteralScopeTest {
         @Test
         @DisplayName("an escaped quote does not end the literal")
         void escapedQuote() {
-            List<Token> tokens = lex("String s = \"a\\\"\u4e2d\\\"b\"; int x;");
-            assertThat(tokens).filteredOn(t -> t.kind == Kind.STRING).singleElement()
-                    .satisfies(t -> assertThat(t.value).isEqualTo("a\"\u4e2d\"b"));
+            assertThat(literals("String s = \"a\\\"\u4e2d\\\"b\"; int x;")).singleElement()
+                    .satisfies(l -> assertThat(l.value).isEqualTo("a\"\u4e2d\"b"));
             assertThat(check("String s = \"a\\\"\u4e2d\\\"b\";")).hasSize(1);
         }
 
@@ -259,9 +241,8 @@ class UltiBackupCjkLiteralScopeTest {
         @Test
         @DisplayName("an escaped backslash before u is not a Unicode escape")
         void escapedBackslashIsNotAnEscape() {
-            List<Token> tokens = lex("String s = \"\\\\u4e2d\";");
-            assertThat(tokens).filteredOn(t -> t.kind == Kind.STRING).singleElement()
-                    .satisfies(t -> assertThat(t.value).isEqualTo("\\u4e2d"));
+            assertThat(literals("String s = \"\\\\u4e2d\";")).singleElement()
+                    .satisfies(l -> assertThat(l.value).isEqualTo("\\u4e2d"));
             assertThat(check("String s = \"\\\\u4e2d\";")).isEmpty();
         }
 
@@ -280,13 +261,12 @@ class UltiBackupCjkLiteralScopeTest {
         @Test
         @DisplayName("octal and standard escapes decode")
         void octalAndStandardEscapes() {
-            List<Token> tokens = lex("String s = \"\\101\\t\\n\\0\\377\";");
-            assertThat(tokens).filteredOn(t -> t.kind == Kind.STRING).singleElement()
-                    .satisfies(t -> assertThat(t.value).isEqualTo("A\t\n\u0000\u00ff"));
+            assertThat(literals("String s = \"\\101\\t\\n\\0\\377\";")).singleElement()
+                    .satisfies(l -> assertThat(l.value).isEqualTo("A\t\n\u0000\u00ff"));
         }
 
         @Test
-        @DisplayName("a text block (not Java 8 syntax, lexed anyway) is scanned")
+        @DisplayName("a text block (not Java 8 syntax, parsed anyway) is scanned")
         void textBlock() {
             assertThat(check("String s = \"\"\"\n    \u4e2d\u6587\n    \"\"\";")).hasSize(1);
         }
@@ -294,22 +274,28 @@ class UltiBackupCjkLiteralScopeTest {
         @Test
         @DisplayName("two adjacent empty strings are two literals, not a text block")
         void emptyStrings() {
-            List<Token> tokens = lex("String s = \"\" + \"\";");
-            assertThat(tokens).filteredOn(t -> t.kind == Kind.STRING).hasSize(2);
+            assertThat(literals("String s = \"\" + \"\";")).hasSize(2);
         }
 
         @Test
-        @DisplayName("an unterminated literal stops the scan instead of being guessed at")
-        void unterminatedLiteralThrows() {
-            assertThatThrownBy(() -> lex("String s = \"abc;\nint x;"))
-                    .isInstanceOf(IllegalStateException.class).hasMessageContaining("line 1");
+        @DisplayName("source javac cannot parse stops the scan instead of being guessed at")
+        void unparsableSourceThrows() {
+            assertThatThrownBy(() -> literals("String s = \"abc;\nint x;"))
+                    .isInstanceOf(IllegalStateException.class).hasMessageStartingWith("src/main/java/Sample.java:2");
         }
 
         @Test
         @DisplayName("line numbers count from the original source")
         void lineNumbers() {
-            List<Token> tokens = lex("a\n\nb /* x\n y */ c\r\nd");
-            assertThat(tokens).extracting(t -> t.line).containsExactly(1, 3, 4, 5);
+            assertThat(literals("String a = \"1\";\n\nString b = /* x\n y */ \"2\";\r\nchar c = 'c';"))
+                    .extracting(l -> l.line).containsExactly(2, 5, 6);
+        }
+
+        @Test
+        @DisplayName("the raw text is kept as written, escapes and all")
+        void rawTextIsKept() {
+            assertThat(literals("String s = \"a\\n\\u4e2d\";")).singleElement()
+                    .satisfies(l -> assertThat(l.raw).isEqualTo("a\\n\\u4e2d"));
         }
     }
 

@@ -288,25 +288,30 @@ class UltiBackupLanguageCatalogueTest {
         return found;
     }
 
+    /**
+     * {@code {NAME}}/{@code {0}} tokens, {@code %%}, and {@code String.format} specifiers with a
+     * {@code s}, {@code d}, {@code f} or {@code x} conversion not followed by a letter -- so prose such
+     * as "100% of" or "50%off" is not mistaken for a specifier.
+     */
     private static final Pattern PLACEHOLDER =
-            Pattern.compile("\\{[A-Za-z0-9_]+}|%%|%(\\d+\\$)?[-#+ 0,(]*\\d*(\\.\\d+)?[a-zA-Z]");
+            Pattern.compile("\\{[A-Za-z0-9_]+}|%%|%(\\d+\\$)?[-#+0,(]*\\d*(\\.\\d+)?[sdfx](?![A-Za-z])");
 
     static List<String> placeholderMismatches(List<Catalogue> cats) {
         List<String> problems = new ArrayList<>();
-        if (cats.isEmpty()) {
-            return problems;
-        }
-        Catalogue first = cats.get(0);
-        for (Catalogue other : cats.subList(1, cats.size())) {
-            for (String key : new TreeSet<>(first.entries.keySet())) {
-                if (!other.entries.containsKey(key)) {
-                    continue;
-                }
-                List<String> a = placeholders(first.entries.get(key));
-                List<String> b = placeholders(other.entries.get(key));
-                if (!a.equals(b)) {
-                    problems.add("\"" + key + "\" has placeholders " + a + " in " + first.fileName + " but " + b
-                            + " in " + other.fileName);
+        for (int i = 0; i < cats.size(); i++) {
+            for (int j = i + 1; j < cats.size(); j++) {
+                Catalogue a = cats.get(i);
+                Catalogue b = cats.get(j);
+                for (String key : new TreeSet<>(a.entries.keySet())) {
+                    if (!b.entries.containsKey(key)) {
+                        continue;
+                    }
+                    List<String> pa = placeholders(a.entries.get(key));
+                    List<String> pb = placeholders(b.entries.get(key));
+                    if (!pa.equals(pb)) {
+                        problems.add("\"" + key + "\" has placeholders " + pa + " in " + a.fileName + " but " + pb
+                                + " in " + b.fileName);
+                    }
                 }
             }
         }
@@ -314,44 +319,43 @@ class UltiBackupLanguageCatalogueTest {
     }
 
     static List<String> shadowedOrMissingCatalogues(File langDir, String[] extensions, List<String> required) {
-        Map<String, List<String>> byCode = new TreeMap<>();
-        File[] files = langDir.listFiles();
-        if (files != null) {
-            for (File f : files) {
-                for (String ext : extensions) {
-                    if (f.isFile() && f.getName().endsWith(ext)) {
-                        String code = f.getName().substring(0, f.getName().length() - ext.length());
-                        byCode.computeIfAbsent(code, k -> new ArrayList<>()).add(f.getName());
-                    }
-                }
-            }
-        }
+        Map<String, List<File>> byCode = catalogueFilesByCode(langDir, extensions);
         List<String> problems = new ArrayList<>();
         for (String code : required) {
             if (!byCode.containsKey(code)) {
                 problems.add("lang/" + code + " has no catalogue (looked for " + Arrays.toString(extensions) + ")");
             }
         }
-        for (Map.Entry<String, List<String>> e : byCode.entrySet()) {
-            if (e.getValue().size() > 1) {
-                List<String> ordered = orderByExtension(e.getValue(), extensions);
-                problems.add("lang/" + e.getKey() + " has " + ordered + "; the framework loads only "
-                        + ordered.get(0) + " and never reads " + ordered.subList(1, ordered.size()));
+        for (Map.Entry<String, List<File>> e : byCode.entrySet()) {
+            List<String> names = new ArrayList<>();
+            for (File f : e.getValue()) {
+                names.add(f.getName());
+            }
+            if (names.size() > 1) {
+                problems.add("lang/" + e.getKey() + " has " + names + "; the framework loads only "
+                        + names.get(0) + " and never reads " + names.subList(1, names.size()));
             }
         }
         return problems;
     }
 
-    private static List<String> orderByExtension(List<String> names, String[] extensions) {
-        List<String> ordered = new ArrayList<>();
+    /** Catalogue files in {@code langDir} by language code, each list in the framework's extension order. */
+    static Map<String, List<File>> catalogueFilesByCode(File langDir, String[] extensions) {
+        Map<String, List<File>> byCode = new TreeMap<>();
         for (String ext : extensions) {
-            for (String n : names) {
-                if (n.endsWith(ext)) {
-                    ordered.add(n);
+            File[] files = langDir.listFiles();
+            if (files == null) {
+                continue;
+            }
+            Arrays.sort(files);
+            for (File f : files) {
+                if (f.isFile() && f.getName().endsWith(ext)) {
+                    String code = f.getName().substring(0, f.getName().length() - ext.length());
+                    byCode.computeIfAbsent(code, k -> new ArrayList<>()).add(f);
                 }
             }
         }
-        return ordered;
+        return byCode;
     }
 
     /** The enumerations that match a real key site; a stale one makes no key reachable. */
@@ -427,32 +431,28 @@ class UltiBackupLanguageCatalogueTest {
      * Resolves each language code the way {@code UltiToolsPlugin#resolveJarLanguage} does: the first
      * extension, in the framework's order, that exists.
      */
-    static List<Catalogue> loadModuleCatalogues() throws Exception {
-        File langDir = catalogueDirectory();
-        String[] extensions = languageExtensions();
-        Set<String> codes = new TreeSet<>(REQUIRED_CODES);
-        File[] files = langDir.listFiles();
-        if (files != null) {
-            for (File f : files) {
-                for (String ext : extensions) {
-                    if (f.isFile() && f.getName().endsWith(ext)) {
-                        codes.add(f.getName().substring(0, f.getName().length() - ext.length()));
-                    }
-                }
-            }
-        }
-        List<Catalogue> result = new ArrayList<>();
-        for (String code : codes) {
-            for (String ext : extensions) {
-                File f = new File(langDir, code + ext);
-                if (f.isFile()) {
+    static synchronized List<Catalogue> loadModuleCatalogues() throws Exception {
+        if (loaded == null) {
+            File langDir = catalogueDirectory();
+            String[] extensions = languageExtensions();
+            Map<String, List<File>> byCode = catalogueFilesByCode(langDir, extensions);
+            Set<String> codes = new TreeSet<>(REQUIRED_CODES);
+            codes.addAll(byCode.keySet());
+            List<Catalogue> result = new ArrayList<>();
+            for (String code : codes) {
+                List<File> files = byCode.get(code);
+                if (files != null) {
+                    File f = files.get(0);
+                    String ext = f.getName().substring(code.length());
                     result.add(new Catalogue(code, "lang/" + f.getName(), parse(f.toPath(), ext)));
-                    break;
                 }
             }
+            loaded = Collections.unmodifiableList(result);
         }
-        return result;
+        return loaded;
     }
+
+    private static List<Catalogue> loaded;
 
     /** Parses exactly as {@code UltiToolsPlugin#parseLanguageResource} does. */
     static Map<String, String> parse(Path file, String extension) throws IOException {
@@ -574,7 +574,7 @@ class UltiBackupLanguageCatalogueTest {
             SourceFile f = source("private String i18n(String key) { return plugin.i18n(\"p.\" + key); }");
             assertThat(f.sites).hasSize(1);
             assertThat(f.sites.get(0).passThrough).isFalse();
-            assertThat(f.sites.get(0).expression).isEqualTo("\"p.\"+key");
+            assertThat(f.sites.get(0).expression).isEqualTo("\"p.\" + key");
         }
 
         @Test
@@ -626,13 +626,20 @@ class UltiBackupLanguageCatalogueTest {
         }
 
         @Test
+        @DisplayName("a method name written with a Unicode escape is still i18n")
+        void unicodeEscapedMethodName() {
+            SourceFile f = source("void m() { plugin.i1\\u0038n(\"escaped.name\"); }");
+            assertThat(f.sites).extracting(s -> s.literalKey).containsExactly("escaped.name");
+        }
+
+        @Test
         @DisplayName("an unlisted computed key fails; a listed one passes; a stale listing fails")
         void dynamicSitesMustBeEnumerated() {
             List<SourceFile> files = Collections.singletonList(
                     source("void m() { plugin.i18n(\"a.\" + kind); }"));
             assertThat(unlistedOrStaleDynamicSites(files, Collections.<DynamicSite>emptyList()))
-                    .singleElement().asString().contains("Sample.java:2").contains("\"a.\"+kind");
-            DynamicSite listed = new DynamicSite("src/main/java/Sample.java", "\"a.\"+kind", "kind is x or y",
+                    .singleElement().asString().contains("Sample.java:2").contains("\"a.\" + kind");
+            DynamicSite listed = new DynamicSite("src/main/java/Sample.java", "\"a.\" + kind", "kind is x or y",
                     "a.x", "a.y");
             assertThat(unlistedOrStaleDynamicSites(files, Collections.singletonList(listed))).isEmpty();
             DynamicSite stale = new DynamicSite("src/main/java/Sample.java", "gone()", "r", "a.z");
