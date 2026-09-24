@@ -302,35 +302,48 @@ class UltiBackupLanguageCatalogueTest {
     }
 
     /**
-     * The placeholders of {@code text}: the order-sensitive ones (ordinary {@code String.format}
-     * specifiers and the bare {@code {}} marker) in the order written, then {@code "|"}, then the
-     * ones that may move ({@code %2$s}, {@code %<s}, {@code {NAME}}, {@code {0}}, {@code %NAME%})
-     * sorted. {@code %%} and {@code %n} take no argument and are left out.
+     * The placeholders of {@code text}, sorted, each {@code java.util.Formatter} specifier written as
+     * the argument it formats and how: {@code arg2:%s}, {@code arg1:%.2f}.
+     * <p>
+     * The argument follows {@code Formatter}'s own indexing rules. An explicit index ({@code %2$s})
+     * names it. An ordinary specifier takes the next one in a count of ordinary specifiers only, which
+     * is independent of explicit and relative ones. A relative specifier ({@code %<s}) re-uses the
+     * argument of the specifier before it; with none before it, it is written {@code arg?}, which no
+     * valid translation matches. Two languages agree exactly when every argument is formatted the same
+     * way the same number of times, wherever the translation puts it: {@code "Took %2$s from %1$s"} and
+     * {@code "%1$s ... %2$s"} agree, and {@code "%s has %d"} and {@code "%d ... %s"} do not, because the
+     * second binds the first argument to {@code %d}.
+     * <p>
+     * The bare {@code {}} marker SLF4J and {@code PluginLogger} fill in order is all one kind, so only
+     * their number counts. Named tokens ({@code {PLAYER}}, {@code {0}}, {@code %player_name%}) are kept
+     * as written. {@code %%} and {@code %n} take no argument and are left out.
      */
     static List<String> placeholders(String text) {
-        List<String> inOrder = new ArrayList<>();
-        List<String> anyOrder = new ArrayList<>();
+        List<String> found = new ArrayList<>();
         Matcher m = PLACEHOLDER.matcher(text == null ? "" : text);
+        int ordinary = 0;
+        String previous = null;
         while (m.find()) {
-            String token = m.group();
-            if (token.equals("%%") || token.equals("%n")) {
+            if (m.group("named") != null) {
+                found.add(m.group("named"));
                 continue;
             }
-            // String.format fills an ordinary specifier, and SLF4J / PluginLogger fill {}, strictly in
-            // order, so their order must match between languages (a swapped %s/%d throws at run time).
-            // An indexed specifier (%2$s), a relative one (%<s) or a named token ({PLAYER}, {0},
-            // %player_name%) may move.
-            boolean named = token.startsWith("{") ? !token.equals("{}") : token.endsWith("%");
-            if (!named && !token.contains("$") && !token.contains("<")) {
-                inOrder.add(token);
-            } else {
-                anyOrder.add(token);
+            if (m.group("conversion") == null) {
+                continue; // %% or %n
             }
+            String flags = m.group("flags");
+            String argument;
+            if (flags.indexOf('<') >= 0) {
+                argument = previous == null ? "?" : previous;
+            } else if (m.group("index") != null) {
+                argument = m.group("index");
+            } else {
+                argument = String.valueOf(++ordinary);
+            }
+            previous = "?".equals(argument) ? previous : argument;
+            found.add("arg" + argument + ":%" + flags.replace("<", "") + m.group("conversion"));
         }
-        Collections.sort(anyOrder);
-        List<String> found = new ArrayList<>(inOrder);
-        found.add("|");
-        found.addAll(anyOrder);
+        Collections.sort(found);
         return found;
     }
 
@@ -349,8 +362,9 @@ class UltiBackupLanguageCatalogueTest {
      * {@code "% d"} is therefore not reported. No module catalogue uses one (measured 2026-09-24:
      * 0 of 3,064 entries across the fifteen module repositories).
      */
-    private static final Pattern PLACEHOLDER = Pattern.compile("\\{[A-Za-z0-9_]*}|%[A-Za-z_][A-Za-z0-9_]+%|%%|%n"
-            + "|%(\\d+\\$)?[-#+0,(<]*\\d*(\\.\\d+)?([tT][a-zA-Z]|[bBhHsScCdoxXeEfgGaA])");
+    private static final Pattern PLACEHOLDER = Pattern.compile("(?<named>\\{[A-Za-z0-9_]*}|%[A-Za-z_][A-Za-z0-9_]+%)"
+            + "|%%|%n|%(?:(?<index>\\d+)\\$)?(?<flags>[-#+0,(<]*)"
+            + "(?<conversion>\\d*(?:\\.\\d+)?(?:[tT][a-zA-Z]|[bBhHsScCdoxXeEfgGaA]))");
 
     static List<String> placeholderMismatches(List<Catalogue> cats) {
         List<String> problems = new ArrayList<>();
@@ -917,7 +931,7 @@ class UltiBackupLanguageCatalogueTest {
         @Test
         @DisplayName("a %NAME% token is a placeholder, read whole rather than as a specifier (Codex, UltiBackup#22)")
         void percentNameTokenIsAPlaceholder() throws IOException {
-            assertThat(placeholders("&e%online%&7/&e%max%")).containsExactly("|", "%max%", "%online%");
+            assertThat(placeholders("&e%online%&7/&e%max%")).containsExactly("%max%", "%online%");
             assertThat(placeholderMismatches(Arrays.asList(
                     yaml("en", "k: \"Welcome %player_name%\"\n"), yaml("zh", "k: \"\u6b22\u8fce %name%\"\n"))))
                     .singleElement().asString().startsWith("\"k\"");
