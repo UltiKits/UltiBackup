@@ -286,16 +286,33 @@ class UltiBackupLanguageCatalogueTest {
         return problems;
     }
 
-    /** {@code {NAME}} / {@code {0}} tokens and {@code String.format} specifiers, sorted. */
+    /**
+     * The placeholders of {@code text}: the order-sensitive ones (ordinary {@code String.format}
+     * specifiers and the bare {@code {}} marker) in the order written, then {@code "|"}, then the
+     * ones that may move ({@code %2$s}, {@code {NAME}}, {@code {0}}) sorted.
+     */
     static List<String> placeholders(String text) {
-        List<String> found = new ArrayList<>();
+        List<String> inOrder = new ArrayList<>();
+        List<String> anyOrder = new ArrayList<>();
         Matcher m = PLACEHOLDER.matcher(text == null ? "" : text);
         while (m.find()) {
-            if (!m.group().equals("%%")) {
-                found.add(m.group());
+            String token = m.group();
+            if (token.equals("%%")) {
+                continue;
+            }
+            // String.format fills an ordinary specifier, and SLF4J / PluginLogger fill {}, strictly in
+            // order, so their order must match between languages (a swapped %s/%d throws at run time).
+            // An indexed specifier (%2$s) or a named token ({PLAYER}, {0}) may move.
+            if (token.equals("{}") || (token.startsWith("%") && !token.contains("$"))) {
+                inOrder.add(token);
+            } else {
+                anyOrder.add(token);
             }
         }
-        Collections.sort(found);
+        Collections.sort(anyOrder);
+        List<String> found = new ArrayList<>(inOrder);
+        found.add("|");
+        found.addAll(anyOrder);
         return found;
     }
 
