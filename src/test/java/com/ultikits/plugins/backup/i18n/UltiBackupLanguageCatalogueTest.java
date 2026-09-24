@@ -938,6 +938,21 @@ class UltiBackupLanguageCatalogueTest {
         }
 
         @Test
+        @DisplayName("every percent sign belongs to one placeholder, so none can be dropped or added unnoticed (Codex, UltiBackup#22)")
+        void everyPercentSignIsCounted() throws IOException {
+            List<String> problems = placeholderMismatches(Arrays.asList(
+                    yaml("en", "one: \"Hi %x%\"\npair: \"100%% sure\"\nspace: \"Got % d items\"\nprose: \"Saved 100% of it\"\n"),
+                    yaml("zh", "one: \"\u4f60\u597d %x\"\npair: \"\u786e\u5b9a\"\nspace: \"\u5f97\u5230\u7269\u54c1\"\n"
+                            + "prose: \"\u5df2\u4fdd\u5b58100%\"\n")));
+            // one: a one-character %x% lost its closing %; pair: a %% was dropped; space: a space-flagged
+            // specifier was dropped. prose: one literal % in each language, so nothing is reported.
+            assertThat(problems).extracting(p -> p.substring(0, p.indexOf(' ')))
+                    .containsExactly("\"one\"", "\"pair\"", "\"space\"");
+            // Two adjacent specifiers stay two specifiers: %s% is not read as a named token.
+            assertThat(placeholders("%s%s")).containsExactly("arg1:%s", "arg2:%s");
+        }
+
+        @Test
         @DisplayName("a relative specifier %<s stays bound to the argument before it (Codex, UltiBackup#22)")
         void relativeSpecifierKeepsItsArgument() throws IOException {
             List<String> problems = placeholderMismatches(Arrays.asList(
