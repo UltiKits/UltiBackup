@@ -34,6 +34,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * the source; the reason is required. Lines starting with {@code #} and blank lines are ignored. An
  * exemption that no longer matches a literal fails the build, so the file cannot drift.
  * <p>
+ * One structural category is skipped without an exemption line: the value of a {@code @ConfigEntry}
+ * annotation's {@code comment} element, and nothing else (maintainer ruling 2026-09-24). The reason
+ * is written next to the skip in {@link #violations}.
+ * <p>
  * This file is copied unchanged into every module; only its package line and class name differ.
  */
 @DisplayName("Language guard 2: Chinese literals")
@@ -152,6 +156,16 @@ class UltiBackupCjkLiteralScopeTest {
         for (SourceFile f : files) {
             for (Literal l : f.literals) {
                 if (l.key || !I18nSourceScanner.containsCjk(l.value)) {
+                    continue;
+                }
+                // Skipped by structure, not by exemption line: @ConfigEntry(comment = ...) text. The
+                // framework writes comment() verbatim into the operator's YAML and the panel
+                // (AbstractConfigEntity#setComments); there is no catalogue path for it, and Phase 17
+                // forbids a framework change (D-02). Translatable config comments are requested in
+                // UltiKits/UltiTools-Reborn#542. Only that one element of that one annotation is
+                // skipped -- not @ConfigEntry's path, not another annotation's comment, not the
+                // field's default value (pinned by the ConfigEntryComment tests below).
+                if (l.configComment) {
                     continue;
                 }
                 boolean exempt = false;

@@ -93,6 +93,12 @@ final class I18nSourceScanner {
         final int line;
         /** True when the framework looks this literal up as a catalogue key. */
         boolean key;
+        /**
+         * True when the literal is part of the value of a {@code @ConfigEntry} annotation's
+         * {@code comment} element -- and of nothing else. Guard 2 skips these; the reason is written
+         * next to the skip in {@code UltiBackupCjkLiteralScopeTest#violations}.
+         */
+        boolean configComment;
 
         Literal(boolean character, String value, String raw, int line) {
             this.character = character;
@@ -272,6 +278,9 @@ final class I18nSourceScanner {
         /** Literals already known to be keys by the time the literal itself is visited. */
         private final Set<Tree> keyLiterals = Collections.newSetFromMap(new IdentityHashMap<Tree, Boolean>());
         private final Set<Tree> suggestLiterals = Collections.newSetFromMap(new IdentityHashMap<Tree, Boolean>());
+        /** Literals inside the value of {@code @ConfigEntry(comment = ...)}. */
+        private final Set<Tree> configCommentLiterals =
+                Collections.newSetFromMap(new IdentityHashMap<Tree, Boolean>());
 
         Visitor(SourceFile out, CompilationUnitTree unit, SourcePositions positions, String source) {
             this.out = out;
@@ -349,6 +358,14 @@ final class I18nSourceScanner {
                     if (!empty) {
                         addSite(SiteKind.COMMAND_DESCRIPTION, line(a), value, false);
                     }
+                } else if ("ConfigEntry".equals(type) && "comment".equals(element)) {
+                    new TreeScanner<Void, Void>() {
+                        @Override
+                        public Void visitLiteral(LiteralTree literal, Void q) {
+                            configCommentLiterals.add(literal);
+                            return null;
+                        }
+                    }.scan(value, null);
                 } else if ("CmdParam".equals(type) && "suggest".equals(element)
                         && value.getKind() == Tree.Kind.STRING_LITERAL
                         && !"".equals(((LiteralTree) value).getValue())) {
@@ -369,6 +386,7 @@ final class I18nSourceScanner {
                 Literal literal = new Literal(k == Tree.Kind.CHAR_LITERAL, String.valueOf(node.getValue()),
                         written.substring(delimiter, written.length() - delimiter), line(node));
                 literal.key = keyLiterals.contains(node);
+                literal.configComment = configCommentLiterals.contains(node);
                 out.literals.add(literal);
                 if (suggestLiterals.contains(node)) {
                     out.suggestCandidates.add(new SuggestCandidate(literal));
