@@ -354,4 +354,39 @@ class UltiBackupCjkLiteralScopeTest {
                     .singleElement().asString().contains("is stale");
         }
     }
+
+    @Nested
+    @DisplayName("@ConfigEntry(comment = ...) is skipped, and nothing else is (maintainer ruling 2026-09-24)")
+    class ConfigEntryComment {
+
+        @Test
+        @DisplayName("Chinese in @ConfigEntry's comment element does not count, even concatenated")
+        void configEntryCommentIsSkipped() {
+            assertThat(check("@ConfigEntry(path = \"a.b\", comment = \"\u4e2d\u6587\") private String s = \"ok\";\n"
+                    + "@ConfigEntry(path = \"a.c\", comment = \"\u4e2d\" + \"\u6587\") private int n = 1;\n"
+                    + "@com.ultikits.ultitools.annotations.ConfigEntry(path = \"a.d\", comment = \"\u4e2d\") int m;"))
+                    .isEmpty();
+        }
+
+        @Test
+        @DisplayName("negative control: Chinese in @ConfigEntry's path element still counts")
+        void configEntryPathStillCounts() {
+            assertThat(check("@ConfigEntry(path = \"\u4e2d\", comment = \"c\") private String s;"))
+                    .singleElement().asString().contains("\"\u4e2d\"");
+        }
+
+        @Test
+        @DisplayName("negative control: another annotation's comment element still counts")
+        void otherAnnotationCommentStillCounts() {
+            assertThat(check("@ConfigEntity(comment = \"\u4e2d\") @Other(comment = \"\u6587\") private String s;"))
+                    .hasSize(2);
+        }
+
+        @Test
+        @DisplayName("negative control: the field's default value still counts")
+        void fieldDefaultStillCounts() {
+            assertThat(check("@ConfigEntry(path = \"p\", comment = \"\u6ce8\u91ca\") private String s = \"\u4e2d\";"))
+                    .singleElement().asString().contains("\"\u4e2d\"");
+        }
+    }
 }
