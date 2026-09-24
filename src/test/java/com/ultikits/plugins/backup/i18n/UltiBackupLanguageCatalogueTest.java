@@ -725,6 +725,17 @@ class UltiBackupLanguageCatalogueTest {
         }
 
         @Test
+        @DisplayName("a specifier followed by a letter is still a specifier, as java.util.Formatter reads it (%dh)")
+        void specifierFollowedByALetter() throws IOException {
+            assertThat(placeholderMismatches(Arrays.asList(
+                    yaml("en", "h: \"%dh\"\n"), yaml("zh", "h: \"%d\u5c0f\u65f6\"\n"))))
+                    .as("the same %d in both languages").isEmpty();
+            assertThat(placeholderMismatches(Arrays.asList(
+                    yaml("en", "h: \"%dh\"\n"), yaml("zh", "h: \"\u5c0f\u65f6\"\n"))))
+                    .as("a translation that dropped the %d before a letter").singleElement().asString().startsWith("\"h\"");
+        }
+
+        @Test
         @DisplayName("placeholders are compared between every pair of languages, not only against the first")
         void placeholdersComparedPairwise() throws IOException {
             List<String> problems = placeholderMismatches(Arrays.asList(
