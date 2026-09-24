@@ -25,6 +25,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   unrecognised value). Previously all three showed the stored constant (`DEATH`, `QUIT`, `AUTO`,
   `MANUAL`, `ADMIN`, or `UNKNOWN`) whatever the language, and the six `backup.reason.*` language
   keys were never used (UltiKits/UltiBackup#15).
+- This module's console lines now come from the language files and follow the framework's
+  `language` setting: the enable line, backup created or failed, a backup's checksum or content
+  that could not be read, restore done or failed, the automatic-backup summary, and the
+  force-restore warning. Previously they were English whatever `language` said; the English
+  wording is unchanged.
 - 重载本模块（`/ul reload` 或 `/ul reload UltiBackup`）现在会重新读取 `config/backup.yml` 并刷新语言文件，修改后的
   `max_backups_per_player` 等配置无需重启即可对下一次备份生效。此前本模块的重载方法替换了框架的重载方法且
   只输出一行日志，这两步都不会执行，重载报告成功却什么也没有重载。UltiTools 6.3.0 还会在此时执行
@@ -37,6 +42,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   每个备份的原因（`死亡备份`、`退出备份`、`自动备份`、`手动备份`、`管理员备份`，缺失或无法识别时为 `未知`）。
   此前三处都显示存储的常量（`DEATH`、`QUIT`、`AUTO`、`MANUAL`、`ADMIN` 或 `UNKNOWN`），不随语言变化，
   六个 `backup.reason.*` 语言键从未被使用（UltiKits/UltiBackup#15）。
+- 本模块的控制台日志现在取自语言文件，随框架的 `language` 设置变化：启用日志、备份创建成功或失败、备份校验和或
+  内容无法读取、恢复成功或失败、自动备份汇总，以及强制恢复警告。此前无论 `language` 如何设置都是英文；英文措辞不变。
 
 ### Removed
 

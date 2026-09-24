@@ -107,9 +107,10 @@ public class ForceRestoreConfirmPage extends BaseConfirmationPage {
                     target.sendMessage(i18n("backup.message.restored_by_admin")
                         .replace("{ADMIN}", viewer.getName()));
                 }
-                plugin.getLogger().warn(
-                    "Player " + viewer.getName() + " force-restored corrupted backup " + 
-                    metadata.getId() + " to " + target.getName());
+                plugin.getLogger().warn(i18n("backup.log.force_restored")
+                    .replace("{ADMIN}", viewer.getName())
+                    .replace("{ID}", String.valueOf(metadata.getId()))
+                    .replace("{PLAYER}", target.getName()));
                 break;
                 
             case LOAD_FAILED:
