@@ -15,6 +15,7 @@ import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.UnaryTree;
+import com.sun.source.tree.VariableTree;
 import com.sun.source.util.JavacTask;
 import com.sun.source.util.SourcePositions;
 import com.sun.source.util.TreeScanner;
@@ -35,7 +36,6 @@ import javax.tools.ToolProvider;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.URI;
@@ -111,12 +111,33 @@ final class I18nSourceScanner {
          * next to the skip in {@code UltiBackupCjkLiteralScopeTest#reportable}.
          */
         boolean configComment;
+        /** For a {@link #configComment} literal: the field its annotation sits on, and how it was written. */
+        ConfigSite configSite;
 
         Literal(boolean character, String value, String raw, int line) {
             this.character = character;
             this.value = value;
             this.raw = raw;
             this.line = line;
+        }
+    }
+
+    /** The field a {@code @ConfigEntry(comment = ...)} literal's annotation sits on. */
+    static final class ConfigSite {
+        /** Binary name of the class declaring the field; {@code null} for a local or anonymous class. */
+        final String owner;
+        /** The field's name; {@code null} when the annotation is not on a field declaration. */
+        final String field;
+        /** The annotation type as written: {@code ConfigEntry}, the full name, or another qualified name. */
+        final String written;
+        /** Whether the same field carries an annotation written with the framework's full name. */
+        final boolean fieldHasFullName;
+
+        ConfigSite(String owner, String field, String written, boolean fieldHasFullName) {
+            this.owner = owner;
+            this.field = field;
+            this.written = written;
+            this.fieldHasFullName = fieldHasFullName;
         }
     }
 
@@ -213,7 +234,7 @@ final class I18nSourceScanner {
             String rel = moduleRoot.relativize(p).toString().replace('\\', '/');
             result.add(parse(rel, new String(Files.readAllBytes(p), StandardCharsets.UTF_8)));
         }
-        confirmConfigComments(result, I18nSourceScanner.class.getClassLoader());
+        confirmConfigComments(result, loading(I18nSourceScanner.class.getClassLoader()));
         return result;
     }
 
@@ -318,75 +339,61 @@ final class I18nSourceScanner {
         return scan;
     }
 
-    /** Not yet implemented: confirms by comment text through {@link #confirmConfigComments(SourceFile, List)}. */
-    static void confirmConfigComments(List<SourceFile> files, Function<String, Class<?>> classes) {
-        for (SourceFile f : files) {
-            String name = f.path.substring("src/main/java/".length(), f.path.length() - ".java".length()).replace('/', '.');
-            Class<?> type = classes.apply(name);
-            confirmConfigComments(f, type == null ? Collections.<String>emptyList() : frameworkConfigComments(type));
-        }
-    }
+    /** The framework's annotation, whose {@code comment} guard 2 skips. */
+    static final String FRAMEWORK_CONFIG_ENTRY = "com.ultikits.ultitools.annotations.ConfigEntry";
 
     /**
-     * Keeps guard 2's {@code @ConfigEntry(comment = ...)} skip only for text the framework's own
-     * annotation carries. The parser marks a literal by the annotation's written name, which an
-     * unrelated annotation also called {@code ConfigEntry} would match. So each file's compiled class
-     * (and its nested classes) is read, and a marked literal whose text is in no
-     * {@code com.ultikits.ultitools.annotations.ConfigEntry#comment()} there loses the mark. The
-     * compiler has already resolved every annotation, so nothing about name resolution is predicted.
-     * Fails closed: a class that cannot be loaded has no comments, and its marked literals are
-     * reported.
+     * Keeps guard 2's {@code @ConfigEntry(comment = ...)} skip only where the annotation is the
+     * framework's. The parser marks a literal by the annotation's written name, which an unrelated
+     * annotation called {@code ConfigEntry} also matches. Each marked literal is bound to the field
+     * its annotation sits on, and the skip stays only when all of these hold:
+     * <ul>
+     * <li>the annotation is written {@code ConfigEntry} or with the framework's full name;</li>
+     * <li>that field, read from the compiled class, carries the framework's {@code ConfigEntry};</li>
+     * <li>a simple-name annotation is not accompanied, on the same field, by one written with the full
+     * name. An annotation cannot appear twice on one field, so in that case the full-name one is the
+     * framework's and the simple-name one is not.</li>
+     * </ul>
+     * The compiler has already decided which type each annotation is. So this reads that decision
+     * rather than predicting it: any other qualified name can never denote a top-level type in
+     * another package. Fails closed: a field in a local or anonymous class, or a class that cannot be
+     * loaded, keeps no skip, and its literals are reported.
      */
-    static void confirmConfigComments(List<SourceFile> files, ClassLoader loader) {
-        String root = "src/main/java/";
+    static void confirmConfigComments(List<SourceFile> files, Function<String, Class<?>> classes) {
         for (SourceFile f : files) {
-            if (!f.path.startsWith(root) || !f.path.endsWith(".java")) {
-                continue;
+            for (Literal l : f.literals) {
+                if (l.configComment) {
+                    l.configComment = isFrameworkConfigEntry(l.configSite, classes);
+                }
             }
-            String name = f.path.substring(root.length(), f.path.length() - ".java".length()).replace('/', '.');
-            List<String> comments;
+        }
+    }
+
+    static boolean isFrameworkConfigEntry(ConfigSite site, Function<String, Class<?>> classes) {
+        if (site == null || site.owner == null || site.field == null) {
+            return false;
+        }
+        boolean fullName = FRAMEWORK_CONFIG_ENTRY.equals(site.written);
+        if (!fullName && (!"ConfigEntry".equals(site.written) || site.fieldHasFullName)) {
+            return false;
+        }
+        try {
+            Class<?> owner = classes.apply(site.owner);
+            return owner != null && owner.getDeclaredField(site.field).isAnnotationPresent(ConfigEntry.class);
+        } catch (NoSuchFieldException | LinkageError e) {
+            return false;
+        }
+    }
+
+    /** Loads a class by binary name without initialising it, or {@code null} when it cannot be loaded. */
+    static Function<String, Class<?>> loading(final ClassLoader loader) {
+        return name -> {
             try {
-                comments = frameworkConfigComments(Class.forName(name, false, loader));
+                return Class.forName(name, false, loader);
             } catch (ClassNotFoundException | LinkageError e) {
-                comments = Collections.emptyList();
+                return null;
             }
-            confirmConfigComments(f, comments);
-        }
-    }
-
-    /** Clears the {@code @ConfigEntry(comment = ...)} mark of every literal whose text is in none of {@code comments}. */
-    static void confirmConfigComments(SourceFile file, List<String> comments) {
-        for (Literal l : file.literals) {
-            if (l.configComment) {
-                boolean carried = false;
-                for (String comment : comments) {
-                    carried |= comment.contains(l.value);
-                }
-                l.configComment = carried;
-            }
-        }
-    }
-
-    /** The {@code comment()} of every framework {@code @ConfigEntry} on a field of {@code type} or a class nested in it. */
-    static List<String> frameworkConfigComments(Class<?> type) {
-        List<String> found = new ArrayList<>();
-        Deque<Class<?>> classes = new ArrayDeque<>();
-        classes.add(type);
-        while (!classes.isEmpty()) {
-            Class<?> c = classes.poll();
-            try {
-                for (Field field : c.getDeclaredFields()) {
-                    ConfigEntry entry = field.getAnnotation(ConfigEntry.class);
-                    if (entry != null) {
-                        found.add(entry.comment());
-                    }
-                }
-                classes.addAll(Arrays.asList(c.getDeclaredClasses()));
-            } catch (LinkageError e) {
-                // a class whose members cannot be linked contributes no comments: fail closed
-            }
-        }
-        return found;
+        };
     }
 
     static SourceFile parse(final String path, final String source) {
@@ -435,9 +442,13 @@ final class I18nSourceScanner {
         private Deque<MethodTree> methods = new ArrayDeque<>();
         /** Literals already known to be keys by the time the literal itself is visited. */
         private final Set<Tree> keyLiterals = Collections.newSetFromMap(new IdentityHashMap<Tree, Boolean>());
-        /** Literals inside the value of {@code @ConfigEntry(comment = ...)}. */
-        private final Set<Tree> configCommentLiterals =
-                Collections.newSetFromMap(new IdentityHashMap<Tree, Boolean>());
+        /** Literals inside the value of {@code @ConfigEntry(comment = ...)}, with their annotation's field. */
+        private final IdentityHashMap<Tree, ConfigSite> configCommentLiterals = new IdentityHashMap<>();
+        /** Binary names of the enclosing classes, innermost first; "" for a local or anonymous class. */
+        private final Deque<String> classNames = new ArrayDeque<>();
+        /** The field whose modifiers are being read, or {@code null}. */
+        private String currentField;
+        private boolean currentFieldHasFullName;
 
         Visitor(SourceFile out, CompilationUnitTree unit, SourcePositions positions, String source) {
             this.out = out;
@@ -453,12 +464,45 @@ final class I18nSourceScanner {
 
         @Override
         public Void visitClass(ClassTree node, Void p) {
+            String simple = node.getSimpleName().toString();
+            String parent = classNames.peek();
+            String binary;
+            if (simple.isEmpty() || !methods.isEmpty() || "".equals(parent)) {
+                binary = ""; // anonymous, local, or inside one: javac numbers these, so no name is computed
+            } else if (parent == null) {
+                String pkg = unit.getPackageName() == null ? "" : unit.getPackageName().toString();
+                binary = pkg.isEmpty() ? simple : pkg + "." + simple;
+            } else {
+                binary = parent + "$" + simple;
+            }
             Deque<MethodTree> saved = methods;
+            String savedField = currentField;
             methods = new ArrayDeque<>();
+            currentField = null;
+            classNames.push(binary);
             try {
                 return super.visitClass(node, p);
             } finally {
+                classNames.pop();
                 methods = saved;
+                currentField = savedField;
+            }
+        }
+
+        @Override
+        public Void visitVariable(VariableTree node, Void p) {
+            String savedField = currentField;
+            boolean savedFullName = currentFieldHasFullName;
+            currentField = methods.isEmpty() ? node.getName().toString() : null;
+            currentFieldHasFullName = false;
+            for (AnnotationTree a : node.getModifiers().getAnnotations()) {
+                currentFieldHasFullName |= FRAMEWORK_CONFIG_ENTRY.equals(a.getAnnotationType().toString());
+            }
+            try {
+                return super.visitVariable(node, p);
+            } finally {
+                currentField = savedField;
+                currentFieldHasFullName = savedFullName;
             }
         }
 
@@ -515,10 +559,13 @@ final class I18nSourceScanner {
                         addSite(SiteKind.COMMAND_DESCRIPTION, line(a), value, false);
                     }
                 } else if ("ConfigEntry".equals(type) && "comment".equals(element)) {
+                    String owner = classNames.peek();
+                    final ConfigSite site = new ConfigSite(owner == null || owner.isEmpty() ? null : owner,
+                            currentField, node.getAnnotationType().toString(), currentFieldHasFullName);
                     new TreeScanner<Void, Void>() {
                         @Override
                         public Void visitLiteral(LiteralTree literal, Void q) {
-                            configCommentLiterals.add(literal);
+                            configCommentLiterals.put(literal, site);
                             return null;
                         }
                     }.scan(value, null);
@@ -541,7 +588,8 @@ final class I18nSourceScanner {
                 Literal literal = new Literal(k == Tree.Kind.CHAR_LITERAL, String.valueOf(node.getValue()),
                         written.substring(delimiter, written.length() - delimiter), line(node));
                 literal.key = keyLiterals.contains(node);
-                literal.configComment = configCommentLiterals.contains(node);
+                literal.configComment = configCommentLiterals.containsKey(node);
+                literal.configSite = configCommentLiterals.get(node);
                 out.literals.add(literal);
             }
             return super.visitLiteral(node, p);
