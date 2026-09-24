@@ -601,6 +601,31 @@ class UltiBackupLanguageCatalogueTest {
         }
 
         @Test
+        @DisplayName("a call right after a greater-than comparison is a call (gate-1 finding 1)")
+        void callAfterComparison() {
+            SourceFile f = source("boolean m(int a, int b, int c) { return a < b && c > i18n(\"after.gt\").length(); }");
+            assertThat(f.sites).extracting(s -> s.literalKey).containsExactly("after.gt");
+        }
+
+        @Test
+        @DisplayName("a forwarding call inside an anonymous class in an i18n wrapper is not a pass-through (finding 2)")
+        void forwardingInsideAnonymousClassIsDynamic() {
+            SourceFile f = source("String i18n(String key) { return new java.util.function.Function<String, String>() {"
+                    + " public String apply(String key) { return plugin.i18n(key); } }.apply(\"x.\" + suffix); }");
+            assertThat(f.sites).hasSize(1);
+            assertThat(f.sites.get(0).passThrough).isFalse();
+        }
+
+        @Test
+        @DisplayName("@CmdParam(suggest = ...) naming no method is a key the framework shows as a hint (finding 3)")
+        void suggestNamingNoMethodIsAKey() {
+            SourceFile f = source("void run(@CmdParam(value = \"p\", suggest = \"backup.hint.player\") String p,\n"
+                    + "        @CmdParam(value = \"q\", suggest = \"suggestThings\") String q) { }\n"
+                    + "java.util.List<String> suggestThings() { return null; }");
+            assertThat(f.sites).extracting(s -> s.literalKey).containsExactly("backup.hint.player");
+        }
+
+        @Test
         @DisplayName("an unlisted computed key fails; a listed one passes; a stale listing fails")
         void dynamicSitesMustBeEnumerated() {
             List<SourceFile> files = Collections.singletonList(
@@ -682,6 +707,22 @@ class UltiBackupLanguageCatalogueTest {
             assertThat(problems).hasSize(2);
             assertThat(problems.get(0)).startsWith("\"b\"");
             assertThat(problems.get(1)).startsWith("\"c\"");
+        }
+
+        @Test
+        @DisplayName("a literal percent sign in prose is not a format placeholder (finding 7)")
+        void percentInProseIsNotAPlaceholder() throws IOException {
+            assertThat(placeholderMismatches(Arrays.asList(
+                    yaml("en", "a: \"Saved 100% of items\"\n"), yaml("zh", "a: \"\u5df2\u4fdd\u5b58100%\"\n"))))
+                    .isEmpty();
+        }
+
+        @Test
+        @DisplayName("placeholders are compared between every pair of languages, not only against the first")
+        void placeholdersComparedPairwise() throws IOException {
+            List<String> problems = placeholderMismatches(Arrays.asList(
+                    yaml("en", "other: \"x\"\n"), yaml("fr", "k: \"{PLAYER}\"\n"), yaml("zh", "k: \"none\"\n")));
+            assertThat(problems).singleElement().asString().startsWith("\"k\"");
         }
 
         @Test
