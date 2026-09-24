@@ -20,6 +20,7 @@ import com.sun.source.util.SourcePositions;
 import com.sun.source.util.TreeScanner;
 import com.sun.source.util.Trees;
 
+import com.ultikits.ultitools.annotations.ConfigEntry;
 import com.ultikits.ultitools.annotations.command.CmdParam;
 import com.ultikits.ultitools.commands.tabcomplete.MethodInvocationCompleter;
 import com.ultikits.ultitools.utils.ReflectionUtil;
@@ -34,6 +35,7 @@ import javax.tools.ToolProvider;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.URI;
@@ -210,6 +212,7 @@ final class I18nSourceScanner {
             String rel = moduleRoot.relativize(p).toString().replace('\\', '/');
             result.add(parse(rel, new String(Files.readAllBytes(p), StandardCharsets.UTF_8)));
         }
+        confirmConfigComments(result, I18nSourceScanner.class.getClassLoader());
         return result;
     }
 
@@ -314,13 +317,66 @@ final class I18nSourceScanner {
         return scan;
     }
 
-    /** Not yet implemented: every syntactic {@code @ConfigEntry(comment = ...)} literal stays skipped. */
-    static void confirmConfigComments(SourceFile file, List<String> comments) {
+    /**
+     * Keeps guard 2's {@code @ConfigEntry(comment = ...)} skip only for text the framework's own
+     * annotation carries. The parser marks a literal by the annotation's written name, which an
+     * unrelated annotation also called {@code ConfigEntry} would match. So each file's compiled class
+     * (and its nested classes) is read, and a marked literal whose text is in no
+     * {@code com.ultikits.ultitools.annotations.ConfigEntry#comment()} there loses the mark. The
+     * compiler has already resolved every annotation, so nothing about name resolution is predicted.
+     * Fails closed: a class that cannot be loaded has no comments, and its marked literals are
+     * reported.
+     */
+    static void confirmConfigComments(List<SourceFile> files, ClassLoader loader) {
+        String root = "src/main/java/";
+        for (SourceFile f : files) {
+            if (!f.path.startsWith(root) || !f.path.endsWith(".java")) {
+                continue;
+            }
+            String name = f.path.substring(root.length(), f.path.length() - ".java".length()).replace('/', '.');
+            List<String> comments;
+            try {
+                comments = frameworkConfigComments(Class.forName(name, false, loader));
+            } catch (ClassNotFoundException | LinkageError e) {
+                comments = Collections.emptyList();
+            }
+            confirmConfigComments(f, comments);
+        }
     }
 
-    /** Not yet implemented. */
+    /** Clears the {@code @ConfigEntry(comment = ...)} mark of every literal whose text is in none of {@code comments}. */
+    static void confirmConfigComments(SourceFile file, List<String> comments) {
+        for (Literal l : file.literals) {
+            if (l.configComment) {
+                boolean carried = false;
+                for (String comment : comments) {
+                    carried |= comment.contains(l.value);
+                }
+                l.configComment = carried;
+            }
+        }
+    }
+
+    /** The {@code comment()} of every framework {@code @ConfigEntry} on a field of {@code type} or a class nested in it. */
     static List<String> frameworkConfigComments(Class<?> type) {
-        return Collections.emptyList();
+        List<String> found = new ArrayList<>();
+        Deque<Class<?>> classes = new ArrayDeque<>();
+        classes.add(type);
+        while (!classes.isEmpty()) {
+            Class<?> c = classes.poll();
+            try {
+                for (Field field : c.getDeclaredFields()) {
+                    ConfigEntry entry = field.getAnnotation(ConfigEntry.class);
+                    if (entry != null) {
+                        found.add(entry.comment());
+                    }
+                }
+                classes.addAll(Arrays.asList(c.getDeclaredClasses()));
+            } catch (LinkageError e) {
+                // a class whose members cannot be linked contributes no comments: fail closed
+            }
+        }
+        return found;
     }
 
     static SourceFile parse(final String path, final String source) {
