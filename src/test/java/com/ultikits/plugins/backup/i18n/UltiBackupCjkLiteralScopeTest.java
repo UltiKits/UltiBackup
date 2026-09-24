@@ -360,6 +360,19 @@ class UltiBackupCjkLiteralScopeTest {
         }
 
         @Test
+        @DisplayName("each occurrence of an exempted literal needs its own line (Codex, UltiBackup#22)")
+        void eachOccurrenceNeedsItsOwnExemption() {
+            String body = "String a = \"\u4e2d\"; String b = \"\u4e2d\";";
+            List<String> one = Collections.singletonList("src/main/java/Sample.java\t\u4e2d\tfile header");
+            assertThat(check(body, one)).as("one line must not cover a second copy").hasSize(1);
+            List<String> two = Arrays.asList(one.get(0), "src/main/java/Sample.java\t\u4e2d\tsecond copy, own reason");
+            assertThat(check(body, two)).isEmpty();
+            SourceFile f = SourceFile.of("src/main/java/Sample.java", "class S { String a = \"\u4e2d\"; }");
+            assertThat(exemptionProblems(two, Collections.singletonList(f)))
+                    .as("a line beyond the number of occurrences is stale").singleElement().asString().contains("is stale");
+        }
+
+        @Test
         @DisplayName("an exemption that matches no literal is stale")
         void staleExemption() {
             SourceFile f = SourceFile.of("src/main/java/Sample.java", "class S { String s = \"ok\"; }");
