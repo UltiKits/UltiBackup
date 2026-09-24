@@ -650,6 +650,22 @@ class UltiBackupLanguageCatalogueTest {
         }
 
         @Test
+        @DisplayName("two sites printing the same expression in one file need one entry each (Codex, UltiBackup#22)")
+        void sameExpressionTwiceNeedsTwoEntries() throws IOException {
+            List<SourceFile> files = Collections.singletonList(source(
+                    "String a(String key) { return plugin.i18n(key); }\n"
+                            + "String b(String key) { return plugin.i18n(key); }"));
+            DynamicSite one = new DynamicSite("src/main/java/Sample.java", "key", "a's keys", "a.one");
+            assertThat(unlistedOrStaleDynamicSites(files, Collections.singletonList(one)))
+                    .as("one entry must not silently cover a second site").singleElement().asString()
+                    .contains("2 non-literal key sites").contains("lists 1");
+            DynamicSite two = new DynamicSite("src/main/java/Sample.java", "key", "b's keys", "b.one");
+            assertThat(unlistedOrStaleDynamicSites(files, Arrays.asList(one, two))).isEmpty();
+            assertThat(unreachableCatalogueKeys(files, Arrays.asList(one, two),
+                    Collections.singletonList(yaml("en", "a.one: \"x\"\nb.one: \"y\"\n")))).isEmpty();
+        }
+
+        @Test
         @DisplayName("a method reference to i18n is a site that must be enumerated")
         void methodReferenceIsASite() {
             SourceFile f = source("void m() { keys.stream().map(plugin::i18n); }");
