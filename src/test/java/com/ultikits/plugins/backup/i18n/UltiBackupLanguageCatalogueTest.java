@@ -742,9 +742,22 @@ class UltiBackupLanguageCatalogueTest {
             List<String> problems = placeholderMismatches(Arrays.asList(
                     yaml("en", "a: \"{PLAYER} has %d of %s, 100%%\"\nb: \"{X}\"\nc: \"{0}\"\n"),
                     yaml("zh", "a: \"%s %d {PLAYER} 100%%\"\nb: \"{Y}\"\nc: \"none\"\n")));
-            assertThat(problems).hasSize(2);
-            assertThat(problems.get(0)).startsWith("\"b\"");
-            assertThat(problems.get(1)).startsWith("\"c\"");
+            // "a" too: String.format fills %d and %s in order, so zh's "%s %d" would throw at run time.
+            assertThat(problems).hasSize(3);
+            assertThat(problems.get(0)).startsWith("\"a\"");
+            assertThat(problems.get(1)).startsWith("\"b\"");
+            assertThat(problems.get(2)).startsWith("\"c\"");
+        }
+
+        @Test
+        @DisplayName("ordinary specifiers and {} must keep their order; indexed specifiers and named tokens may move")
+        void placeholderOrder() throws IOException {
+            List<String> problems = placeholderMismatches(Arrays.asList(
+                    yaml("en", "swap: \"%s has %d\"\nindexed: \"Took %2$s from %1$s\"\n"
+                            + "named: \"{PLAYER} in {WORLD}\"\nlog: \"{} of {}\"\n"),
+                    yaml("zh", "swap: \"%d \u4e2a %s\"\nindexed: \"\u6263\u9664 %1$s %2$s\"\n"
+                            + "named: \"{WORLD} \u91cc\u7684 {PLAYER}\"\nlog: \"{} / {}\"\n")));
+            assertThat(problems).singleElement().asString().startsWith("\"swap\"");
         }
 
         @Test
