@@ -394,7 +394,8 @@ final class I18nSourceScanner {
                     boolean recognisedShape = args.size() == 1 || args.size() == 2;
                     boolean passThrough = recognisedShape && key[1] - key[0] == 1
                             && tokens.get(key[0]).kind == Kind.IDENT
-                            && insideWrapperForwarding(i, tokens.get(key[0]).value, wrapperBodies, wrapperParams);
+                            && insideWrapperForwarding(tokens, i, tokens.get(key[0]).value, wrapperBodies,
+                            wrapperParams);
                     sites.add(site(SiteKind.CALL, tok.line, tokens,
                             recognisedShape ? key : new int[]{i + 2, close}, passThrough));
                 }
@@ -432,11 +433,36 @@ final class I18nSourceScanner {
                 normalise(tokens, range[0], range[1]), literal ? range[0] : -1, passThrough);
     }
 
-    private static boolean insideWrapperForwarding(int callIndex, String argument, List<int[]> bodies,
-                                                   List<String> params) {
+    /**
+     * True when the call at {@code callIndex} sits in the body of a method named {@code i18n} and
+     * forwards that method's key parameter, which the body never reassigns.
+     */
+    private static boolean insideWrapperForwarding(List<Token> tokens, int callIndex, String argument,
+                                                   List<int[]> bodies, List<String> params) {
         for (int k = 0; k < bodies.size(); k++) {
             int[] body = bodies.get(k);
             if (callIndex > body[0] && callIndex < body[1] && params.get(k).equals(argument)) {
+                return !reassigns(tokens, body, argument);
+            }
+        }
+        return false;
+    }
+
+    /** Whether {@code name} is assigned anywhere in {@code body} ({@code =}, {@code +=}, {@code ++} ...). */
+    private static boolean reassigns(List<Token> tokens, int[] body, String name) {
+        for (int j = body[0] + 1; j + 1 < body[1]; j++) {
+            if (!tokens.get(j).is(Kind.IDENT, name) || tokens.get(j - 1).isPunct(".")) {
+                continue;
+            }
+            Token next = tokens.get(j + 1);
+            Token after = j + 2 < body[1] ? tokens.get(j + 2) : null;
+            boolean simpleAssign = next.isPunct("=") && (after == null || !after.isPunct("="));
+            boolean compoundAssign = (next.isPunct("+") || next.isPunct("-")) && after != null
+                    && (after.isPunct("=") || after.isPunct(next.value));
+            boolean prefixIncrement = j >= 2 && tokens.get(j - 1).kind == Kind.PUNCT
+                    && tokens.get(j - 2).isPunct(tokens.get(j - 1).value)
+                    && (tokens.get(j - 1).isPunct("+") || tokens.get(j - 1).isPunct("-"));
+            if (simpleAssign || compoundAssign || prefixIncrement) {
                 return true;
             }
         }
@@ -456,15 +482,22 @@ final class I18nSourceScanner {
             return true;
         }
         if (prev.isPunct(">")) {
+            if (i >= 2 && tokens.get(i - 2).isPunct("-")) {
+                return false;
+            }
             int depth = 0;
             for (int j = i - 1; j >= 0; j--) {
-                if (tokens.get(j).isPunct(">")) {
+                Token t = tokens.get(j);
+                if (t.isPunct(">")) {
                     depth++;
-                } else if (tokens.get(j).isPunct("<")) {
+                } else if (t.isPunct("<")) {
                     depth--;
                     if (depth == 0) {
-                        return j == 0 || !tokens.get(j - 1).isPunct(".");
+                        return j > 0 && tokens.get(j - 1).kind == Kind.IDENT;
                     }
+                } else if (!(t.kind == Kind.IDENT || t.isPunct(",") || t.isPunct(".") || t.isPunct("?")
+                        || t.isPunct("[") || t.isPunct("]") || t.isPunct("&") || t.isPunct("@"))) {
+                    return false;
                 }
             }
         }
