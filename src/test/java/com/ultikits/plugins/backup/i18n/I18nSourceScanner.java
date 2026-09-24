@@ -53,6 +53,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 /**
@@ -315,6 +316,15 @@ final class I18nSourceScanner {
             }
         }
         return scan;
+    }
+
+    /** Not yet implemented: confirms by comment text through {@link #confirmConfigComments(SourceFile, List)}. */
+    static void confirmConfigComments(List<SourceFile> files, Function<String, Class<?>> classes) {
+        for (SourceFile f : files) {
+            String name = f.path.substring("src/main/java/".length(), f.path.length() - ".java".length()).replace('/', '.');
+            Class<?> type = classes.apply(name);
+            confirmConfigComments(f, type == null ? Collections.<String>emptyList() : frameworkConfigComments(type));
+        }
     }
 
     /**
