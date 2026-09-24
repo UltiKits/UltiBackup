@@ -174,23 +174,34 @@ class UltiBackupLanguageCatalogueTest {
 
     static List<String> unlistedOrStaleDynamicSites(List<SourceFile> files, List<DynamicSite> table) {
         List<String> problems = new ArrayList<>();
-        Set<DynamicSite> used = new LinkedHashSet<>();
+        // Sites and entries pair up by (file, expression), one entry per site: two sites printing the
+        // same expression in one file need two entries, so an entry written for one site cannot
+        // silently cover a site added later whose keys nobody enumerated.
+        Map<String, List<Integer>> siteLines = new LinkedHashMap<>();
         for (SourceFile f : files) {
             for (KeySite s : f.sites) {
                 if (s.isLiteral() || s.passThrough) {
                     continue;
                 }
-                DynamicSite entry = find(table, f.path, s.expression);
-                if (entry == null) {
+                if (findAll(table, f.path, s.expression).isEmpty()) {
                     problems.add(f.path + ":" + s.line + " passes a non-literal key (" + s.kind + " "
                             + s.expression + ") that DYNAMIC_KEY_SITES does not enumerate");
                 } else {
-                    used.add(entry);
+                    siteLines.computeIfAbsent(f.path + SEP + s.expression, k -> new ArrayList<>()).add(s.line);
                 }
             }
         }
+        for (Map.Entry<String, List<Integer>> e : siteLines.entrySet()) {
+            String[] fileAndExpression = e.getKey().split(SEP, 2);
+            int listed = findAll(table, fileAndExpression[0], fileAndExpression[1]).size();
+            if (listed != e.getValue().size()) {
+                problems.add(fileAndExpression[0] + " has " + e.getValue().size() + " non-literal key sites printing "
+                        + fileAndExpression[1] + " (lines " + e.getValue() + ") but DYNAMIC_KEY_SITES lists " + listed
+                        + "; list each site once, with its own keys");
+            }
+        }
         for (DynamicSite d : table) {
-            if (!used.contains(d)) {
+            if (!siteLines.containsKey(d.file + SEP + d.expression)) {
                 problems.add("stale DYNAMIC_KEY_SITES entry: " + d.file + " " + d.expression
                         + " matches no key site");
             }
@@ -366,23 +377,24 @@ class UltiBackupLanguageCatalogueTest {
         for (SourceFile f : files) {
             for (KeySite s : f.sites) {
                 if (!s.isLiteral() && !s.passThrough) {
-                    DynamicSite entry = find(table, f.path, s.expression);
-                    if (entry != null) {
-                        matched.add(entry);
-                    }
+                    matched.addAll(findAll(table, f.path, s.expression));
                 }
             }
         }
         return matched;
     }
 
-    private static DynamicSite find(List<DynamicSite> table, String file, String expression) {
+    /** Separates file and expression in a pairing key; neither a path nor printed Java contains it. */
+    private static final String SEP = "\u0000";
+
+    private static List<DynamicSite> findAll(List<DynamicSite> table, String file, String expression) {
+        List<DynamicSite> found = new ArrayList<>();
         for (DynamicSite d : table) {
             if (d.file.equals(file) && d.expression.equals(expression)) {
-                return d;
+                found.add(d);
             }
         }
-        return null;
+        return found;
     }
 
     // ================================================================== catalogue loading
