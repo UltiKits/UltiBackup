@@ -300,14 +300,15 @@ class UltiBackupLanguageCatalogueTest {
     }
 
     /**
-     * {@code {NAME}}/{@code {0}} tokens, {@code %%}, and {@code String.format} specifiers with a
+     * {@code {NAME}}/{@code {0}} tokens, the bare {@code {}} argument marker SLF4J and the framework's
+     * {@code PluginLogger} fill in order, {@code %%}, and {@code String.format} specifiers with a
      * {@code s}, {@code d}, {@code f} or {@code x} conversion. A letter right after the conversion does
      * not end it early: {@code java.util.Formatter} reads {@code "%dh"} as {@code %d} then {@code h}, so
      * the pattern does too. Prose such as "100% of" or "50%off" is still not a specifier -- a space is
      * not one of the flags matched here, and {@code o} is not one of the conversions.
      */
     private static final Pattern PLACEHOLDER =
-            Pattern.compile("\\{[A-Za-z0-9_]+}|%%|%(\\d+\\$)?[-#+0,(]*\\d*(\\.\\d+)?[sdfx]");
+            Pattern.compile("\\{[A-Za-z0-9_]*}|%%|%(\\d+\\$)?[-#+0,(]*\\d*(\\.\\d+)?[sdfx]");
 
     static List<String> placeholderMismatches(List<Catalogue> cats) {
         List<String> problems = new ArrayList<>();
