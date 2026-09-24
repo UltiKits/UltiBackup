@@ -797,6 +797,25 @@ class UltiBackupLanguageCatalogueTest {
         }
 
         @Test
+        @DisplayName("every java.util.Formatter specifier that takes an argument is a placeholder (Codex, UltiBackup#22)")
+        void everyFormatterConversionIsAPlaceholder() throws IOException {
+            for (String spec : new String[]{"%b", "%c", "%o", "%e", "%g", "%S", "%X", "%h", "%a", "%tY", "%1$tY", "%<s"}) {
+                assertThat(placeholderMismatches(Arrays.asList(
+                        yaml("en", "k: \"at " + spec + " here\"\n"), yaml("zh", "k: \"\u5728\u6b64\"\n"))))
+                        .as("a translation that dropped " + spec).singleElement().asString().startsWith("\"k\"");
+            }
+        }
+
+        @Test
+        @DisplayName("a %NAME% token is a placeholder, read whole rather than as a specifier (Codex, UltiBackup#22)")
+        void percentNameTokenIsAPlaceholder() throws IOException {
+            assertThat(placeholders("&e%online%&7/&e%max%")).containsExactly("|", "%max%", "%online%");
+            assertThat(placeholderMismatches(Arrays.asList(
+                    yaml("en", "k: \"Welcome %player_name%\"\n"), yaml("zh", "k: \"\u6b22\u8fce %name%\"\n"))))
+                    .singleElement().asString().startsWith("\"k\"");
+        }
+
+        @Test
         @DisplayName("a logger argument marker {} that a translation drops is reported")
         void loggerMarkerDroppedIsReported() throws IOException {
             assertThat(placeholderMismatches(Arrays.asList(
