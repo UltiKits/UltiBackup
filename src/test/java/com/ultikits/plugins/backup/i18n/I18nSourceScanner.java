@@ -20,6 +20,11 @@ import com.sun.source.util.SourcePositions;
 import com.sun.source.util.TreeScanner;
 import com.sun.source.util.Trees;
 
+import com.ultikits.ultitools.annotations.command.CmdParam;
+import com.ultikits.ultitools.commands.tabcomplete.MethodInvocationCompleter;
+import com.ultikits.ultitools.utils.ReflectionUtil;
+import org.mockito.Mockito;
+
 import javax.tools.Diagnostic;
 import javax.tools.DiagnosticCollector;
 import javax.tools.JavaCompiler;
@@ -28,6 +33,9 @@ import javax.tools.SimpleJavaFileObject;
 import javax.tools.ToolProvider;
 import java.io.IOException;
 import java.io.StringWriter;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -118,8 +126,10 @@ final class I18nSourceScanner {
         /** {@code @CmdExecutor(description = ...)} -- {@code CommandManager} passes it through {@code i18n}. */
         COMMAND_DESCRIPTION,
         /**
-         * {@code @CmdParam(suggest = ...)} naming no method in the module -- the framework's
-         * {@code MethodInvocationCompleter} then shows {@code plugin.i18n(suggest)} as the hint.
+         * A {@code @CmdParam(suggest = ...)} value the framework's own lookup finds no method for on
+         * the compiled executor -- {@code MethodInvocationCompleter} then shows
+         * {@code plugin.i18n(suggest)} as the hint. Found by {@link #scanCompiledSuggestValues}, never
+         * by the parser.
          */
         SUGGEST_HINT
     }
@@ -148,20 +158,6 @@ final class I18nSourceScanner {
         }
     }
 
-    /** A {@code @CmdParam(suggest = ...)} literal, resolved against the module's methods later. */
-    static final class SuggestCandidate {
-        final Literal literal;
-
-        SuggestCandidate(Literal literal) {
-            this.literal = literal;
-        }
-
-        String methodName() {
-            String v = literal.value;
-            return v.endsWith("()") ? v.substring(0, v.length() - 2) : v;
-        }
-    }
-
     /** What {@link #suggestHintSites} found: the hint sites, and every suggest value it saw. */
     static final class SuggestScan {
         /** One file per executor that has a hint site, named after its compiled class. */
@@ -175,18 +171,19 @@ final class I18nSourceScanner {
         final String path;
         final List<Literal> literals = new ArrayList<>();
         final List<KeySite> sites = new ArrayList<>();
-        final Set<String> declaredMethods = new HashSet<>();
-        final List<SuggestCandidate> suggestCandidates = new ArrayList<>();
+        /**
+         * How many {@code @CmdParam(suggest = ...)} values other than {@code ""} the file declares.
+         * Guard 1 checks that the compiled scan saw the same number.
+         */
+        int suggestAttributes;
 
         private SourceFile(String path) {
             this.path = path;
         }
 
-        /** Parses one file on its own; its suggest values are resolved against its own methods. */
+        /** Parses one file on its own. */
         static SourceFile of(String path, String source) {
-            SourceFile f = parse(path, source);
-            resolveSuggestHints(Collections.singletonList(f));
-            return f;
+            return parse(path, source);
         }
     }
 
@@ -213,36 +210,108 @@ final class I18nSourceScanner {
             String rel = moduleRoot.relativize(p).toString().replace('\\', '/');
             result.add(parse(rel, new String(Files.readAllBytes(p), StandardCharsets.UTF_8)));
         }
-        resolveSuggestHints(result);
         return result;
     }
 
-    /** Not yet implemented: suggest values are still resolved from source by {@code resolveSuggestHints}. */
-    static SuggestScan suggestHintSites(List<Class<?>> classes) {
-        return new SuggestScan();
+    /**
+     * Every {@code @CmdParam(suggest = ...)} on the module's compiled classes, resolved by the
+     * framework's own lookup.
+     * <p>
+     * The framework reads the annotation at run time from the executor it registered, and
+     * {@code MethodInvocationCompleter#getSuggestMethodsByName} decides whether the value names a
+     * method (on the executor's class hierarchy, then its {@code @CmdSuggest} classes) or is a key it
+     * shows through {@code plugin.i18n}. This reads the same annotations from {@code target/classes}
+     * and calls that same method, so a constant expression arrives already folded by {@code javac} and
+     * the search is the framework's, not a copy of it. The previous version predicted the outcome from
+     * source by method name and was wrong in both directions review found: it could not read a
+     * constant expression, and it accepted a method that only an unrelated class declares.
+     * <p>
+     * Fails closed: a class that cannot be loaded, or an executor the lookup cannot be run on, gives
+     * a key site with no literal key. {@code DYNAMIC_KEY_SITES} does not list it, so guard 1 reports it.
+     */
+    static SuggestScan scanCompiledSuggestValues(Path moduleRoot) throws IOException {
+        Path classes = moduleRoot.resolve("target/classes");
+        List<String> names = new ArrayList<>();
+        try (Stream<Path> walk = Files.walk(classes)) {
+            walk.filter(p -> p.toString().endsWith(".class") && Files.isRegularFile(p)).forEach(p -> {
+                String rel = classes.relativize(p).toString().replace('\\', '/');
+                names.add(rel.substring(0, rel.length() - ".class".length()));
+            });
+        }
+        Collections.sort(names);
+        List<Class<?>> loaded = new ArrayList<>();
+        List<SourceFile> unloadable = new ArrayList<>();
+        ClassLoader loader = I18nSourceScanner.class.getClassLoader();
+        for (String name : names) {
+            if (name.endsWith("package-info") || name.endsWith("module-info")) {
+                continue;
+            }
+            try {
+                loaded.add(Class.forName(name.replace('/', '.'), false, loader));
+            } catch (ClassNotFoundException | LinkageError e) {
+                SourceFile f = new SourceFile("target/classes/" + name + ".class");
+                f.sites.add(new KeySite(SiteKind.SUGGEST_HINT, 0, null, "class cannot be loaded: " + e, false));
+                unloadable.add(f);
+            }
+        }
+        SuggestScan scan = suggestHintSites(loaded);
+        scan.hints.addAll(0, unloadable);
+        return scan;
     }
 
     /**
-     * The framework resolves {@code suggest = "x"} to a method named {@code x} (a trailing {@code ()}
-     * removed) on the executor's class hierarchy or its {@code @CmdSuggest} classes, and only when
-     * none exists shows {@code plugin.i18n("x")}. Without types, the nearest faithful reading is: a
-     * value that names a method declared anywhere in the module is a method; anything else is a key.
+     * The hint sites among {@code classes}: every {@code @CmdParam(suggest = ...)} on a concrete class
+     * (and the methods it inherits) for which {@code MethodInvocationCompleter#getSuggestMethodsByName}
+     * finds no method. The lookup reads only the executor's class, so the executor passed to it is a
+     * Mockito mock of that class; the inline mock maker keeps the class itself, which is checked.
      */
-    static void resolveSuggestHints(List<SourceFile> files) {
-        Set<String> methods = new HashSet<>();
-        for (SourceFile f : files) {
-            methods.addAll(f.declaredMethods);
-        }
-        for (SourceFile f : files) {
-            for (SuggestCandidate c : f.suggestCandidates) {
-                if (!methods.contains(c.methodName())) {
-                    c.literal.key = true;
-                    f.sites.add(new KeySite(SiteKind.SUGGEST_HINT, c.literal.line, c.literal.value,
-                            "\"" + c.literal.raw + "\"", false));
+    static SuggestScan suggestHintSites(List<Class<?>> classes) {
+        SuggestScan scan = new SuggestScan();
+        for (Class<?> type : classes) {
+            if (type.isInterface() || type.isEnum() || Modifier.isAbstract(type.getModifiers())) {
+                continue; // the framework only ever registers an instance of a concrete class
+            }
+            SourceFile file = new SourceFile("target/classes/" + type.getName().replace('.', '/') + ".class");
+            Object executor = null;
+            for (Method method : ReflectionUtil.getAllMethods(type)) {
+                Annotation[][] parameters = method.getParameterAnnotations();
+                for (int i = 0; i < parameters.length; i++) {
+                    for (Annotation a : parameters[i]) {
+                        if (!(a instanceof CmdParam) || ((CmdParam) a).suggest().isEmpty()) {
+                            continue;
+                        }
+                        String suggest = ((CmdParam) a).suggest();
+                        String where = method + " parameter " + i;
+                        scan.seen.add(where);
+                        Method[] found;
+                        try {
+                            if (executor == null) {
+                                executor = Mockito.mock(type);
+                                if (executor.getClass() != type) {
+                                    throw new IllegalStateException("the mock is a " + executor.getClass().getName());
+                                }
+                            }
+                            found = MethodInvocationCompleter.getSuggestMethodsByName(executor, suggest);
+                        } catch (RuntimeException | LinkageError e) {
+                            file.sites.add(new KeySite(SiteKind.SUGGEST_HINT, 0, null,
+                                    where + " suggest = \"" + suggest + "\": cannot resolve: " + e, false));
+                            continue;
+                        }
+                        if (found == null || found.length == 0) {
+                            file.sites.add(new KeySite(SiteKind.SUGGEST_HINT, 0, suggest,
+                                    where + " suggest = \"" + suggest + "\"", false));
+                        }
+                    }
                 }
             }
-            f.suggestCandidates.clear();
+            if (executor != null) {
+                Mockito.framework().clearInlineMock(executor);
+            }
+            if (!file.sites.isEmpty()) {
+                scan.hints.add(file);
+            }
         }
+        return scan;
     }
 
     static SourceFile parse(final String path, final String source) {
@@ -291,7 +360,6 @@ final class I18nSourceScanner {
         private Deque<MethodTree> methods = new ArrayDeque<>();
         /** Literals already known to be keys by the time the literal itself is visited. */
         private final Set<Tree> keyLiterals = Collections.newSetFromMap(new IdentityHashMap<Tree, Boolean>());
-        private final Set<Tree> suggestLiterals = Collections.newSetFromMap(new IdentityHashMap<Tree, Boolean>());
         /** Literals inside the value of {@code @ConfigEntry(comment = ...)}. */
         private final Set<Tree> configCommentLiterals =
                 Collections.newSetFromMap(new IdentityHashMap<Tree, Boolean>());
@@ -321,7 +389,6 @@ final class I18nSourceScanner {
 
         @Override
         public Void visitMethod(MethodTree node, Void p) {
-            out.declaredMethods.add(node.getName().toString());
             methods.push(node);
             try {
                 return super.visitMethod(node, p);
@@ -381,9 +448,8 @@ final class I18nSourceScanner {
                         }
                     }.scan(value, null);
                 } else if ("CmdParam".equals(type) && "suggest".equals(element)
-                        && value.getKind() == Tree.Kind.STRING_LITERAL
-                        && !"".equals(((LiteralTree) value).getValue())) {
-                    suggestLiterals.add(value);
+                        && !(value instanceof LiteralTree && "".equals(((LiteralTree) value).getValue()))) {
+                    out.suggestAttributes++;
                 }
             }
             return super.visitAnnotation(node, p);
@@ -402,9 +468,6 @@ final class I18nSourceScanner {
                 literal.key = keyLiterals.contains(node);
                 literal.configComment = configCommentLiterals.contains(node);
                 out.literals.add(literal);
-                if (suggestLiterals.contains(node)) {
-                    out.suggestCandidates.add(new SuggestCandidate(literal));
-                }
             }
             return super.visitLiteral(node, p);
         }

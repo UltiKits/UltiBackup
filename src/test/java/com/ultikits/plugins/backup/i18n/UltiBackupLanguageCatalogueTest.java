@@ -79,11 +79,14 @@ class UltiBackupLanguageCatalogueTest {
     ));
 
     private static List<SourceFile> sources;
+    private static I18nSourceScanner.SuggestScan suggestScan;
     private static List<Catalogue> catalogues;
 
     @BeforeAll
     static void scan() throws Exception {
-        sources = I18nSourceScanner.scanMainSources(I18nSourceScanner.moduleRoot());
+        sources = new ArrayList<>(I18nSourceScanner.scanMainSources(I18nSourceScanner.moduleRoot()));
+        suggestScan = I18nSourceScanner.scanCompiledSuggestValues(I18nSourceScanner.moduleRoot());
+        sources.addAll(suggestScan.hints);
         catalogues = loadModuleCatalogues();
     }
 
@@ -103,6 +106,16 @@ class UltiBackupLanguageCatalogueTest {
         for (Catalogue c : catalogues) {
             assertThat(c.entries).as(c.fileName + " entries").isNotEmpty();
         }
+    }
+
+    @Test
+    @DisplayName("control: the compiled scan saw every @CmdParam(suggest = ...) the source declares")
+    void suggestScanSawEverySuggestValue() {
+        int declared = 0;
+        for (SourceFile f : sources) {
+            declared += f.suggestAttributes;
+        }
+        assertThat(suggestScan.seen).as("suggest values on the compiled classes").hasSize(declared);
     }
 
     @Test
@@ -744,12 +757,12 @@ class UltiBackupLanguageCatalogueTest {
         }
 
         @Test
-        @DisplayName("@CmdParam(suggest = ...) naming no method is a key the framework shows as a hint (finding 3)")
-        void suggestNamingNoMethodIsAKey() {
-            SourceFile f = source("void run(@CmdParam(value = \"p\", suggest = \"backup.hint.player\") String p,\n"
-                    + "        @CmdParam(value = \"q\", suggest = \"suggestThings\") String q) { }\n"
-                    + "java.util.List<String> suggestThings() { return null; }");
-            assertThat(f.sites).extracting(s -> s.literalKey).containsExactly("backup.hint.player");
+        @DisplayName("the parser counts each @CmdParam(suggest = ...) that is not \"\", literal or constant")
+        void suggestAttributesAreCounted() {
+            SourceFile f = source("void run(@CmdParam(value = \"p\", suggest = \"x\") String p,\n"
+                    + "        @CmdParam(value = \"q\", suggest = K) String q, @CmdParam(value = \"r\", suggest = \"\") String r) { }");
+            assertThat(f.suggestAttributes).isEqualTo(2);
+            assertThat(f.sites).as("the parser no longer decides what a suggest value is").isEmpty();
         }
 
         @Test
