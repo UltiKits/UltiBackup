@@ -14,7 +14,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -36,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * <p>
  * One structural category is skipped without an exemption line: the value of a {@code @ConfigEntry}
  * annotation's {@code comment} element, and nothing else (maintainer ruling 2026-09-24). The reason
- * is written next to the skip in {@link #violations}.
+ * is written next to the skip in {@link #reportable}.
  * <p>
  * This file is copied unchanged into every module; only its package line and class name differ.
  */
@@ -136,43 +138,61 @@ class UltiBackupCjkLiteralScopeTest {
                 problems.add(EXEMPTIONS + ":" + (i + 1) + " has no reason; every exemption needs one");
             }
         }
+        // One line per occurrence: the n-th line naming a literal needs an n-th reportable
+        // occurrence of it in that file, otherwise the line is stale.
+        Map<String, Integer> linesSoFar = new HashMap<>();
         for (Exemption e : parseExemptions(lines)) {
-            boolean matched = false;
+            int occurrences = 0;
             for (SourceFile f : files) {
                 for (Literal l : f.literals) {
-                    matched |= e.matches(f.path, l);
+                    if (reportable(l) && e.matches(f.path, l)) {
+                        occurrences++;
+                    }
                 }
             }
-            if (!matched) {
+            int nth = linesSoFar.merge(e.path + "\u0000" + e.literal, 1, Integer::sum);
+            if (nth > occurrences) {
                 problems.add(EXEMPTIONS + ":" + e.lineNumber + " is stale: no literal \"" + e.literal + "\" in "
-                        + e.path);
+                        + e.path + (occurrences > 0 ? " left for it (" + occurrences + " occurrence(s), "
+                        + nth + " lines)" : ""));
             }
         }
         return problems;
     }
 
+    /** Whether guard 2 judges this literal: Chinese text that is neither a key nor a config comment. */
+    static boolean reportable(Literal l) {
+        if (l.key || !I18nSourceScanner.containsCjk(l.value)) {
+            return false;
+        }
+        // Skipped by structure, not by exemption line: @ConfigEntry(comment = ...) text. The
+        // framework writes comment() verbatim into the operator's YAML and the panel
+        // (AbstractConfigEntity#setComments); there is no catalogue path for it, and Phase 17
+        // forbids a framework change (D-02). Translatable config comments are requested in
+        // UltiKits/UltiTools-Reborn#542. Only that one element of that one annotation is
+        // skipped -- not @ConfigEntry's path, not another annotation's comment, not the
+        // field's default value (pinned by the ConfigEntryComment tests below).
+        return !l.configComment;
+    }
+
     static List<String> violations(List<SourceFile> files, List<Exemption> exemptions) {
         List<String> problems = new ArrayList<>();
         for (SourceFile f : files) {
+            // Exemptions are consumed one per occurrence, so a line written for one literal cannot
+            // silently cover a copy of the same text added later without its own reason.
+            Map<String, Integer> occurrencesSoFar = new HashMap<>();
             for (Literal l : f.literals) {
-                if (l.key || !I18nSourceScanner.containsCjk(l.value)) {
+                if (!reportable(l)) {
                     continue;
                 }
-                // Skipped by structure, not by exemption line: @ConfigEntry(comment = ...) text. The
-                // framework writes comment() verbatim into the operator's YAML and the panel
-                // (AbstractConfigEntity#setComments); there is no catalogue path for it, and Phase 17
-                // forbids a framework change (D-02). Translatable config comments are requested in
-                // UltiKits/UltiTools-Reborn#542. Only that one element of that one annotation is
-                // skipped -- not @ConfigEntry's path, not another annotation's comment, not the
-                // field's default value (pinned by the ConfigEntryComment tests below).
-                if (l.configComment) {
-                    continue;
-                }
-                boolean exempt = false;
+                int lines = 0;
                 for (Exemption e : exemptions) {
-                    exempt |= e.matches(f.path, l);
+                    if (e.matches(f.path, l)) {
+                        lines++;
+                    }
                 }
-                if (!exempt) {
+                int nth = occurrencesSoFar.merge(l.raw, 1, Integer::sum);
+                if (nth > lines) {
                     problems.add(f.path + ":" + l.line + " has Chinese text outside i18n(): \"" + l.raw + "\"");
                 }
             }
