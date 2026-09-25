@@ -18,6 +18,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - 修复：恢复一个物品数据无法读取的备份时，不再清空玩家背包并报告成功；恢复被拒绝，背包保持原样。
   不是合法 YAML、缺少物品栏部分或在结尾之前被截断的备份文件按加载失败处理；某一部分中超出其所恢复到的物品栏范围的槽位视为无法读取。控制台会写明备份、玩家和无法读取的部分，
   备份预览遇到无法读取的部分也会同样记录（UltiKits/UltiBackup#21）。
+- With `backup_armor: false`, restoring a backup no longer destroys the armor and off-hand item the
+  player is wearing; the restore replaces only the inventory's storage slots (UltiKits/UltiBackup#25).
+- 修复：`backup_armor: false` 时恢复备份不再销毁玩家正穿戴的护甲与副手物品；恢复只替换背包的存储格
+  （UltiKits/UltiBackup#25）。
 
 - Reloading this module (`/ul reload` or `/ul reload UltiBackup`) now re-reads `config/backup.yml` and refreshes the
   language files, so an edited value such as `max_backups_per_player` applies to the next backup

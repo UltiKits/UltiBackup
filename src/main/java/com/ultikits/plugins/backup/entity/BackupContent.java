@@ -290,8 +290,14 @@ public class BackupContent {
             enderChest = readItems(enderchestContents, PART_ENDERCHEST);
         }
 
-        // Clear current inventory
-        player.getInventory().clear();
+        // Clear what the restore replaces. PlayerInventory#clear() empties armor and off-hand too, so
+        // when armor is not restored only the storage slots are cleared: otherwise the armor and
+        // off-hand the player is wearing would be destroyed and nothing put back (UltiKits/UltiBackup#25).
+        if (restoreArmor) {
+            player.getInventory().clear();
+        } else {
+            player.getInventory().setStorageContents(new ItemStack[player.getInventory().getStorageContents().length]);
+        }
         
         // Restore inventory contents
         if (contents != null) {
