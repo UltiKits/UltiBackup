@@ -11,11 +11,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Restoring a backup whose items cannot be read no longer empties the player's inventory and reports
   success; the restore is refused and the inventory is left as it was. A backup file that is not
-  valid YAML, or that has no inventory section, is refused as a load failure. The console names the
+  valid YAML, that has no inventory section, or that is cut off before its end, is refused as a load
+  failure, and a part holding a slot outside the inventory it is restored to cannot be read. The console names the
   backup, the player and the part that could not be read, and the backup preview logs an unreadable
   part the same way (UltiKits/UltiBackup#21).
 - 修复：恢复一个物品数据无法读取的备份时，不再清空玩家背包并报告成功；恢复被拒绝，背包保持原样。
-  不是合法 YAML 或缺少物品栏部分的备份文件按加载失败处理。控制台会写明备份、玩家和无法读取的部分，
+  不是合法 YAML、缺少物品栏部分或在结尾之前被截断的备份文件按加载失败处理；某一部分中超出其所恢复到的物品栏范围的槽位视为无法读取。控制台会写明备份、玩家和无法读取的部分，
   备份预览遇到无法读取的部分也会同样记录（UltiKits/UltiBackup#21）。
 
 - Reloading this module (`/ul reload` or `/ul reload UltiBackup`) now re-reads `config/backup.yml` and refreshes the

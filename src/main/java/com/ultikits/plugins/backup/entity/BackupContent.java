@@ -171,8 +171,9 @@ public class BackupContent {
         // Not YamlConfiguration#loadConfiguration: for a body it cannot parse, that logs and returns
         // an EMPTY configuration, every part then reads as blank, and a restore would clear the
         // player's inventory and apply nothing (UltiKits/UltiBackup#21). A file this module wrote
-        // always carries the "inventory" key (saveToFile sets it even for an empty inventory), so
-        // a file without it is not a readable backup either.
+        // always carries the "inventory" key (saveToFile sets it even for an empty inventory) and
+        // ends with "expProgress" (the last key it writes, always set), so a file without either is
+        // not a whole backup: saveToFile writes in one pass, and a crash or a full disk leaves a prefix.
         YamlConfiguration yaml = new YamlConfiguration();
         try {
             yaml.load(file);
@@ -181,6 +182,9 @@ public class BackupContent {
         }
         if (!yaml.contains("inventory")) {
             throw new IOException("Backup file has no inventory section: " + file.getName());
+        }
+        if (!yaml.contains("expProgress")) {
+            throw new IOException("Backup file is incomplete (no expProgress, its last key): " + file.getName());
         }
 
         return BackupContent.builder()
@@ -440,6 +444,7 @@ public class BackupContent {
      *                                 items section {@link #serializeItems} writes
      */
     private static ItemStack[] readItems(String data, String part) {
+        int capacity = capacityOf(part);
         if (data == null || data.isEmpty()) {
             return null;
         }
@@ -455,7 +460,9 @@ public class BackupContent {
             int maxSlot = 0;
             for (String key : yaml.getConfigurationSection("items").getKeys(false)) {
                 int slot = Integer.parseInt(key);
-                if (slot < 0) {
+                // A slot outside the inventory the part is applied to cannot have been written by
+                // fromPlayer, and applying it would throw after the inventory was already cleared.
+                if (slot < 0 || slot >= capacity) {
                     throw new UnreadablePartException(part, null);
                 }
                 maxSlot = Math.max(maxSlot, slot);
@@ -505,6 +512,20 @@ public class BackupContent {
         } catch (Exception e) {
             throw new UnreadablePartException(part, e);
         }
+    }
+
+    /**
+     * How many slots the inventory a part is applied to has: 36 storage slots, 4 armor slots, 27
+     * ender chest slots (the sizes {@link #fromPlayer} reads them from).
+     */
+    private static int capacityOf(String part) {
+        if (PART_ARMOR.equals(part)) {
+            return 4;
+        }
+        if (PART_ENDERCHEST.equals(part)) {
+            return 27;
+        }
+        return 36;
     }
 
     /** Stored key of the inventory part, as written in the backup file. */
