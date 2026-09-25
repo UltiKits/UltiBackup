@@ -171,6 +171,20 @@ class BackupContentTest {
         }
 
         @Test
+        @DisplayName("Should refuse a file that ends like a backup but has no inventory key")
+        void refusesFileWithoutInventoryEvenWithItsLastKey() throws IOException {
+            // The inventory key is checked on its own, not only through the last key: a file with its
+            // inventory line removed by hand still ends with expProgress, and would load as all-blank.
+            File file = tempDir.resolve("no-inventory.yml").toFile();
+            try (BufferedWriter w = new BufferedWriter(
+                    new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
+                w.write("armor: ''\nexpLevel: 3\nexpProgress: 0.5\n");
+            }
+
+            assertThatThrownBy(() -> BackupContent.loadFromFile(file)).isInstanceOf(IOException.class);
+        }
+
+        @Test
         @DisplayName("Should load defaults for missing fields")
         void loadDefaults() throws IOException {
             File file = tempDir.resolve("minimal-with-inventory.yml").toFile();
