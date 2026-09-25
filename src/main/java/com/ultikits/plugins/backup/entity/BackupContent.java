@@ -186,6 +186,20 @@ public class BackupContent {
         if (!yaml.contains("expProgress")) {
             throw new IOException("Backup file is incomplete (no expProgress, its last key): " + file.getName());
         }
+        // The typed getters below turn a missing or mistyped key into a default ("" or 0) that a
+        // restore would apply. saveToFile writes the four parts as text, armor and off-hand together
+        // or not at all, and both experience values as numbers, always: refuse any other shape here.
+        for (String part : new String[] {"inventory", "armor", "offhand", "enderchest"}) {
+            if (yaml.contains(part) && !yaml.isString(part)) {
+                throw new IOException("Backup file part is not text: " + part + " in " + file.getName());
+            }
+        }
+        if (yaml.contains("armor") != yaml.contains("offhand")) {
+            throw new IOException("Backup file has armor or off-hand without the other: " + file.getName());
+        }
+        if (!yaml.isInt("expLevel") || !(yaml.get("expProgress") instanceof Number)) {
+            throw new IOException("Backup file experience is missing or not a number: " + file.getName());
+        }
 
         return BackupContent.builder()
             .inventoryContents(yaml.getString("inventory", ""))

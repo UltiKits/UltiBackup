@@ -190,9 +190,9 @@ class BackupContentTest {
             File file = tempDir.resolve("minimal-with-inventory.yml").toFile();
             try (BufferedWriter w = new BufferedWriter(
                     new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
-                // inventory and expProgress are the first and last keys every saved file carries;
-                // everything between them may be missing and defaults.
-                w.write("inventory: ''\nsomeOtherKey: value\nexpProgress: 0.0\n");
+                // inventory, expLevel and expProgress are in every saved file; armor/off-hand and
+                // ender chest may be missing, and an unknown key is ignored.
+                w.write("inventory: ''\nsomeOtherKey: value\nexpLevel: 0\nexpProgress: 0.0\n");
             }
 
             BackupContent loaded = BackupContent.loadFromFile(file);
