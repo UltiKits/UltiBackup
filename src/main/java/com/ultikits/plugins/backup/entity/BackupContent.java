@@ -269,15 +269,17 @@ public class BackupContent {
      * (UltiKits/UltiBackup#21). A blank part is a part that was genuinely empty when it was backed
      * up, and is restored as empty, as before.
      * <p>
-     * 将内容恢复到玩家。先读取将要恢复的每一部分；任一非空部分无法读取时，在清空或写入任何东西之前抛出
-     * {@link UnreadablePartException}，玩家背包保持原样。
+     * 将内容恢复到玩家。先读取将要恢复的每一部分；任一非空部分无法读取，或在恢复经验时等级为负、经验进度不在
+     * 0-1 之间时，在清空或写入任何东西之前抛出 {@link UnreadablePartException}，玩家背包保持原样。
      *
      * @param player the player
      * @param restoreArmor whether to restore armor
      * @param restoreEnderchest whether to restore ender chest
      * @param restoreExp whether to restore experience
-     * @throws UnreadablePartException if a part that is not blank cannot be read back; nothing
-     *                                 has been changed on the player
+     * @throws UnreadablePartException if a part that is not blank cannot be read back, or, when
+     *                                 experience is restored, the level is negative or the
+     *                                 progress is outside 0-1; nothing has been changed on the
+     *                                 player
      */
     public void restoreToPlayer(Player player, boolean restoreArmor, 
             boolean restoreEnderchest, boolean restoreExp) {

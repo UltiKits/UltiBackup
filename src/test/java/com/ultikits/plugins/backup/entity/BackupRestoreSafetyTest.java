@@ -458,6 +458,17 @@ class BackupRestoreSafetyTest {
         assertThat(player.getLevel()).isZero();
         assertThat(player.getExp()).isEqualTo(1.0f);
         assertThat(player.getInventory().getItem(0)).isEqualTo(new ItemStack(Material.DIAMOND, 3));
+
+        // A player who has just levelled up holds exactly 0 progress.
+        BackupContent justLevelled = backupOfBackedUpState();
+        justLevelled.setExpProgress(0.0f);
+        giveCurrentState();
+        player.setExp(0.5f);
+
+        justLevelled.restoreToPlayer(player, true, true, true);
+
+        assertThat(player.getExp()).isZero();
+        assertThat(player.getLevel()).isEqualTo(12);
     }
 
     @Test
