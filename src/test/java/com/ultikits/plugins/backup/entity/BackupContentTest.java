@@ -198,7 +198,10 @@ class BackupContentTest {
             BackupContent loaded = BackupContent.loadFromFile(file);
 
             assertThat(loaded.getInventoryContents()).isEmpty();
-            assertThat(loaded.getArmorContents()).isEmpty();
+            // A missing armor part is kept apart from an empty one: it means the backup was taken
+            // without armor, and a restore must not clear worn armor it cannot put back (UltiBackup#25).
+            assertThat(loaded.getArmorContents()).isNull();
+            assertThat(loaded.getOffhandItem()).isNull();
             assertThat(loaded.getExpLevel()).isZero();
             assertThat(loaded.getExpProgress()).isZero();
         }

@@ -348,6 +348,40 @@ class BackupRestoreSafetyTest {
         assertThat(player.getInventory().getItem(0)).isEqualTo(new ItemStack(Material.DIAMOND, 3));
     }
 
+    @Test
+    @DisplayName("A backup taken without armor, restored with armor on, keeps the worn armor and off-hand (UltiBackup#25, gate-1 R2-WR-01)")
+    void backupWithoutArmorRestoredWithArmorOnKeepsWornArmor() throws Exception {
+        File file = tempDir.resolve("taken-without-armor.yml").toFile();
+        giveBackedUpState();
+        BackupContent.fromPlayer(player, false, true, true).saveToFile(file);
+        BackupContent loaded = BackupContent.loadFromFile(file);
+        giveCurrentState();
+
+        loaded.restoreToPlayer(player, true, true, true);
+
+        assertThat(player.getInventory().getChestplate())
+                .as("the backup has no armor to put back, so the worn armor is not taken")
+                .isEqualTo(new ItemStack(Material.DIAMOND_CHESTPLATE));
+        assertThat(player.getInventory().getItemInOffHand()).isEqualTo(new ItemStack(Material.TORCH, 4));
+        assertThat(player.getInventory().getItem(0)).isEqualTo(new ItemStack(Material.DIAMOND, 3));
+    }
+
+    @Test
+    @DisplayName("Control: a backup taken with armor while none was worn, restored with armor on, empties the armor slots")
+    void backupWithEmptyArmorRestoredWithArmorOnEmptiesArmor() throws Exception {
+        File file = tempDir.resolve("taken-with-no-armor-worn.yml").toFile();
+        player.getInventory().clear();
+        player.getInventory().setItem(0, new ItemStack(Material.DIAMOND, 3));
+        BackupContent.fromPlayer(player, true, true, true).saveToFile(file);
+        BackupContent loaded = BackupContent.loadFromFile(file);
+        giveCurrentState();
+
+        loaded.restoreToPlayer(player, true, true, true);
+
+        assertThat(player.getInventory().getChestplate()).as("the backup's armor, empty, was restored").isNull();
+        assertThat(player.getInventory().getItemInOffHand().getType().isAir()).isTrue();
+    }
+
     /** One item as the module's own serializer writes it under an items.N key, indented for that key. */
     private static String itemYaml(ItemStack item) {
         org.bukkit.configuration.file.YamlConfiguration yaml = new org.bukkit.configuration.file.YamlConfiguration();
