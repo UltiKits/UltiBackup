@@ -350,7 +350,7 @@ public class BackupContent {
      * @return the inventory items
      */
     public ItemStack[] getInventoryItems() {
-        return deserializeItems(inventoryContents);
+        return deserializeItems(inventoryContents, PART_INVENTORY);
     }
     
     /**
@@ -361,7 +361,7 @@ public class BackupContent {
      * @return the armor items
      */
     public ItemStack[] getArmorItems() {
-        return deserializeItems(armorContents);
+        return deserializeItems(armorContents, PART_ARMOR);
     }
     
     /**
@@ -383,7 +383,7 @@ public class BackupContent {
      * @return the ender chest items
      */
     public ItemStack[] getEnderchestItems() {
-        return deserializeItems(enderchestContents);
+        return deserializeItems(enderchestContents, PART_ENDERCHEST);
     }
     
     // ============ Serialization Utilities ============
@@ -417,9 +417,9 @@ public class BackupContent {
     /**
      * Deserialize items from YAML string; {@code null} when blank or unreadable.
      */
-    private static ItemStack[] deserializeItems(String data) {
+    private static ItemStack[] deserializeItems(String data, String part) {
         try {
-            return readItems(data, PART_INVENTORY);
+            return readItems(data, part);
         } catch (UnreadablePartException e) {
             return null;
         }
