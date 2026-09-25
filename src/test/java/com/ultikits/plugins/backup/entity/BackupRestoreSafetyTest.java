@@ -166,6 +166,19 @@ class BackupRestoreSafetyTest {
     }
 
     @Test
+    @DisplayName("Inventory text with an empty items section: nothing is cleared or applied (Codex P2 on #26)")
+    void inventoryWithEmptyItemsSectionChangesNothing() {
+        // serializeItems writes an empty part as blank text, never as an empty section.
+        BackupContent content = backupOfBackedUpState();
+        content.setInventoryContents("items: {}\n");
+        giveCurrentState();
+
+        assertThatThrownBy(() -> content.restoreToPlayer(player, true, true, true))
+                .isInstanceOf(BackupContent.UnreadablePartException.class);
+        assertCurrentStateUnchanged();
+    }
+
+    @Test
     @DisplayName("Unreadable armor while the inventory reads fine: the inventory is not applied either")
     void unreadableArmorChangesNothing() {
         BackupContent content = backupOfBackedUpState();
