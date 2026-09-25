@@ -138,7 +138,10 @@ public class BackupContent {
         // Always written, even for an empty inventory: loadFromFile refuses a file without it.
         yaml.set("inventory", inventoryContents == null ? "" : inventoryContents);
         yaml.set("armor", armorContents);
-        yaml.set("offhand", offhandItem);
+        // Armor and off-hand are written together or not at all (loadFromFile refuses one without the
+        // other): with an armor part, no off-hand text is an empty hand, written as blank text; without
+        // one, the off-hand is never restored, so it is not written.
+        yaml.set("offhand", armorContents == null ? null : (offhandItem == null ? "" : offhandItem));
         yaml.set("enderchest", enderchestContents);
         yaml.set("expLevel", expLevel);
         yaml.set("expProgress", expProgress);
