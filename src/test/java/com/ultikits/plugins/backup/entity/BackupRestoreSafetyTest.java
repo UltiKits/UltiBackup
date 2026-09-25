@@ -296,6 +296,58 @@ class BackupRestoreSafetyTest {
         assertThat(content.getInventoryItems()).as("control: the inventory part still reads").isNotNull();
     }
 
+    @Test
+    @DisplayName("With armor not restored, the worn armor and off-hand are kept (UltiBackup#25)")
+    void armorNotRestoredKeepsWornArmorAndOffhand() {
+        BackupContent content = backupOfBackedUpState();
+        giveCurrentState();
+
+        content.restoreToPlayer(player, false, true, true);
+
+        assertThat(player.getInventory().getChestplate())
+                .as("backup_armor: false must not take the armor the player is wearing")
+                .isEqualTo(new ItemStack(Material.DIAMOND_CHESTPLATE));
+        assertThat(player.getInventory().getItemInOffHand()).as("nor the off-hand item")
+                .isEqualTo(new ItemStack(Material.TORCH, 4));
+        assertThat(player.getInventory().getItem(0)).as("the storage slots were restored")
+                .isEqualTo(new ItemStack(Material.DIAMOND, 3));
+        assertThat(player.getInventory().getItem(1)).as("and replaced, as before").isNull();
+    }
+
+    @Test
+    @DisplayName("Control: with armor restored, the worn armor is replaced by the backup's")
+    void armorRestoredReplacesWornArmor() {
+        BackupContent content = backupOfBackedUpState();
+        giveCurrentState();
+
+        content.restoreToPlayer(player, true, true, true);
+
+        assertThat(player.getInventory().getChestplate()).as("the backup held no chestplate").isNull();
+        assertThat(player.getInventory().getHelmet()).isEqualTo(new ItemStack(Material.IRON_HELMET));
+        assertThat(player.getInventory().getItemInOffHand()).isEqualTo(new ItemStack(Material.SHIELD));
+    }
+
+    @Test
+    @DisplayName("Through forceRestore with backup_armor: false, the worn armor is kept (UltiBackup#25)")
+    void forceRestoreWithBackupArmorOffKeepsWornArmor() throws Exception {
+        File file = tempDir.resolve("no-armor.yml").toFile();
+        giveBackedUpState();
+        BackupContent.fromPlayer(player, false, true, true).saveToFile(file);
+        BackupMetadata[] metadata = new BackupMetadata[1];
+        BackupService service = serviceWith(file, metadata);
+        BackupConfig config = UltiBackupTestHelper.createDefaultConfig();
+        org.mockito.Mockito.when(config.isBackupArmor()).thenReturn(false);
+        UltiBackupTestHelper.setField(service, "config", config);
+        giveCurrentState();
+
+        BackupService.RestoreResult result = service.forceRestore(player, metadata[0]);
+
+        assertThat(result).isEqualTo(BackupService.RestoreResult.SUCCESS);
+        assertThat(player.getInventory().getChestplate()).isEqualTo(new ItemStack(Material.DIAMOND_CHESTPLATE));
+        assertThat(player.getInventory().getItemInOffHand()).isEqualTo(new ItemStack(Material.TORCH, 4));
+        assertThat(player.getInventory().getItem(0)).isEqualTo(new ItemStack(Material.DIAMOND, 3));
+    }
+
     /** One item as the module's own serializer writes it under an items.N key, indented for that key. */
     private static String itemYaml(ItemStack item) {
         org.bukkit.configuration.file.YamlConfiguration yaml = new org.bukkit.configuration.file.YamlConfiguration();

@@ -445,14 +445,26 @@ class BackupContentTest {
     class RestoreToPlayer {
 
         @Test
-        @DisplayName("Should clear inventory before restore")
+        @DisplayName("Should clear the whole inventory before a restore that restores armor")
         void clearsInventory() {
+            Player player = UltiBackupTestHelper.createMockPlayer("P", UUID.randomUUID());
+            BackupContent content = BackupContent.builder().build();
+
+            content.restoreToPlayer(player, true, false, false);
+
+            verify(player.getInventory()).clear();
+        }
+
+        @Test
+        @DisplayName("Should clear only the storage slots when armor is not restored (UltiBackup#25)")
+        void clearsOnlyStorageWithoutArmor() {
             Player player = UltiBackupTestHelper.createMockPlayer("P", UUID.randomUUID());
             BackupContent content = BackupContent.builder().build();
 
             content.restoreToPlayer(player, false, false, false);
 
-            verify(player.getInventory()).clear();
+            verify(player.getInventory(), never()).clear();
+            verify(player.getInventory()).setStorageContents(any(ItemStack[].class));
         }
 
         @Test
