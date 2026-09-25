@@ -238,6 +238,62 @@ class BackupRestoreSafetyTest {
                 .isNull();
     }
 
+    @Test
+    @DisplayName("An armor part with a slot beyond the four armor slots is refused before anything changes (gate-1 IN-02)")
+    void armorSlotBeyondTheArmorSlotsChangesNothing() {
+        BackupContent content = backupOfBackedUpState();
+        content.setArmorContents("items:\n  '4':\n" + itemYaml(new ItemStack(Material.IRON_BOOTS)));
+        giveCurrentState();
+
+        assertThatThrownBy(() -> content.restoreToPlayer(player, true, true, true))
+                .isInstanceOf(BackupContent.UnreadablePartException.class)
+                .extracting(e -> ((BackupContent.UnreadablePartException) e).getPart())
+                .isEqualTo(BackupContent.PART_ARMOR);
+        assertCurrentStateUnchanged();
+    }
+
+    @Test
+    @DisplayName("An ender chest part with a slot beyond its 27 slots is refused before anything changes (gate-1 IN-02)")
+    void enderchestSlotBeyondItsSizeChangesNothing() {
+        BackupContent content = backupOfBackedUpState();
+        content.setEnderchestContents("items:\n  '27':\n" + itemYaml(new ItemStack(Material.EMERALD)));
+        giveCurrentState();
+
+        assertThatThrownBy(() -> content.restoreToPlayer(player, true, true, true))
+                .isInstanceOf(BackupContent.UnreadablePartException.class)
+                .extracting(e -> ((BackupContent.UnreadablePartException) e).getPart())
+                .isEqualTo(BackupContent.PART_ENDERCHEST);
+        assertCurrentStateUnchanged();
+    }
+
+    @Test
+    @DisplayName("An inventory part with a slot beyond the 36 storage slots is refused before anything changes (gate-1 IN-02)")
+    void inventorySlotBeyondStorageChangesNothing() {
+        BackupContent content = backupOfBackedUpState();
+        content.setInventoryContents("items:\n  '36':\n" + itemYaml(new ItemStack(Material.DIAMOND)));
+        giveCurrentState();
+
+        assertThatThrownBy(() -> content.restoreToPlayer(player, true, true, true))
+                .isInstanceOf(BackupContent.UnreadablePartException.class)
+                .extracting(e -> ((BackupContent.UnreadablePartException) e).getPart())
+                .isEqualTo(BackupContent.PART_INVENTORY);
+        assertCurrentStateUnchanged();
+    }
+
+    /** One item as the module's own serializer writes it under an items.N key, indented for that key. */
+    private static String itemYaml(ItemStack item) {
+        org.bukkit.configuration.file.YamlConfiguration yaml = new org.bukkit.configuration.file.YamlConfiguration();
+        yaml.set("x", item);
+        StringBuilder out = new StringBuilder();
+        for (String line : yaml.saveToString().split("\n")) {
+            if (line.startsWith("x:")) {
+                continue;
+            }
+            out.append("  ").append(line).append('\n');
+        }
+        return out.toString();
+    }
+
     // ==================== Through BackupService#forceRestore, with a real file ====================
 
     private BackupService serviceWith(File backupFile, BackupMetadata[] metadataOut) throws Exception {
@@ -303,6 +359,27 @@ class BackupRestoreSafetyTest {
         verify(UltiBackupTestHelper.getMockLogger())
                 .warn(any(BackupContent.UnreadablePartException.class), contains("backup.log.restore_unreadable"));
         verify(UltiBackupTestHelper.getMockLogger(), never()).info(contains("backup.log.restored"));
+    }
+
+    @Test
+    @DisplayName("forceRestore of a file cut off after its inventory block answers LOAD_FAILED and changes nothing (gate-1 WR-01)")
+    void forceRestoreOfFileTruncatedAfterInventoryFails() throws Exception {
+        File file = tempDir.resolve("cut.yml").toFile();
+        backupOfBackedUpState().saveToFile(file);
+        String text = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+        int armor = text.indexOf("\narmor:");
+        assertThat(armor).as("precondition: the armor section follows the inventory block").isPositive();
+        // saveToFile writes the whole file in one pass with no temporary file, so a crash or a full
+        // disk leaves a prefix: the inventory block, which is written first, and nothing after it.
+        Files.write(file.toPath(), text.substring(0, armor + 1).getBytes(StandardCharsets.UTF_8));
+        BackupMetadata[] metadata = new BackupMetadata[1];
+        BackupService service = serviceWith(file, metadata);
+        giveCurrentState();
+
+        BackupService.RestoreResult result = service.forceRestore(player, metadata[0]);
+
+        assertThat(result).isEqualTo(BackupService.RestoreResult.LOAD_FAILED);
+        assertCurrentStateUnchanged();
     }
 
     @Test
