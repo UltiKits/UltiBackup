@@ -37,24 +37,24 @@ for real-machine verification, not user-facing documentation.
 - **Columns:** `ID`, `Preconditions`, `Steps`, `Expected`, `Layer`, `Covers`.
 - **ID:** cites its `FEATURES.md` ID verbatim. A negative case suffixes the checklist ID only,
   as `.neg-<slug>` — a negative case still tests the same feature, so the base ID is unchanged.
-- **Layer**, copied verbatim from Laojun's own `ultitools-real-client-uat` skill so no
+- **Layer**, copied verbatim from the real-client acceptance tooling's fixed vocabulary so no
   translation step exists at dispatch time: `protocol`, `java-client`, `os-input`, `pixel`,
   `server`, `human`.
-- **Human-authenticated-session rows (D-27b):** a row whose Steps can only be exercised through
+- **Human-authenticated-session rows:** a row whose Steps can only be exercised through
   the maintainer's own authenticated UltiCloud panel session carries the fixed Preconditions
   phrase `maintainer-authenticated UltiCloud panel session (personal credentials)` and Layer
   `human`. This module has no panel-facing surface at all (no capability, no remote route), so no
   row below is affected; the convention is stated here for template consistency.
 - **Expected** must name an observable truth — an exact chat line, a log line, a database row,
   an inventory slot — and never the words "it works".
-- **Covers** back-references a Phase 9 GUI-excluded class name; left blank when no such class
+- **Covers** back-references a GUI class excluded from the JaCoCo coverage gate; left blank when no such class
   applies. This module owns all three of its GUI-excluded classes (`BackupGUI`,
   `BackupPreviewGUI`, `ForceRestoreConfirmPage`) — each is named in exactly one row's Covers cell
   below.
 - A row whose Preconditions name a prior row must appear after that row in file order — asserted
   mechanically: for every row, every checklist ID cited in its Preconditions cell must have a
-  strictly smaller line number in this file than the row citing it (sweep class 8, D-27a).
-- **Config-per-file rule (D-06):** one checklist row per `@ConfigEntity`-annotated class or per
+  strictly smaller line number in this file than the row citing it.
+- **Config-per-file rule:** one checklist row per `@ConfigEntity`-annotated class or per
   shipped yml file, never one row per key. This module has exactly one such file
   (`plugins/UltiTools/pluginConfig/UltiBackup/config/backup.yml`, generated from `BackupConfig`'s `@ConfigEntry` defaults — no packaged
   seed resource exists to extract), so exactly one config-per-file row appears below
@@ -117,7 +117,7 @@ module's config files into the running beans, then logs the framework's own line
 sender. Both lines are framework strings localised by the framework's `language` setting, hence
 the row's `language: en` precondition. `/ul` requires op, so the row runs it from the server
 console. `ultibackup.lifecycle.reload` supersedes `ultibackup.event.module-reload` (retired with
-`UltiKits/UltiBackup#14`; its Phase 10 verdict recorded the defect, not this behaviour).
+`UltiKits/UltiBackup#14`; its earlier checklist verdict recorded the defect, not this behaviour).
 
 | ID | Preconditions | Steps | Expected | Layer | Covers |
 |---|---|---|---|---|---|
@@ -139,7 +139,7 @@ console. `ultibackup.lifecycle.reload` supersedes `ultibackup.event.module-reloa
 
 ## Configuration
 
-One row per shipped yml file (D-06's config-per-file rule): `plugins/UltiTools/pluginConfig/UltiBackup/config/backup.yml` (8 keys, no
+One row per shipped yml file (the config-per-file rule): `plugins/UltiTools/pluginConfig/UltiBackup/config/backup.yml` (8 keys, no
 packaged seed resource — generated from `BackupConfig`'s `@ConfigEntry` defaults on first boot).
 This row confirms every key is present at its `FEATURES.md`-documented default, then flips one or
 more representative keys and observes the behaviour follow — **except

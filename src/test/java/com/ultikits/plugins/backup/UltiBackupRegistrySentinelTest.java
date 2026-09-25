@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
- * Reopen-guard sentinel for the module's test-time server bootstrap (Phase 14).
+ * Reopen-guard sentinel for the module's test-time server bootstrap.
  * <p>
  * Every assertion below depends on a live server having been bootstrapped -- never on a bare
  * registry constant, which {@code mockbukkit-v1.21} resolves via {@link java.util.ServiceLoader}

@@ -734,7 +734,7 @@ class UltiBackupLanguageCatalogueTest {
         }
 
         @Test
-        @DisplayName("a call right after a greater-than comparison is a call (gate-1 finding 1)")
+        @DisplayName("a call right after a greater-than comparison is a call")
         void callAfterComparison() {
             SourceFile f = source("boolean m(int a, int b, int c) { return a < b && c > i18n(\"after.gt\").length(); }");
             assertThat(f.sites).extracting(s -> s.literalKey).containsExactly("after.gt");
