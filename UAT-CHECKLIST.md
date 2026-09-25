@@ -17,15 +17,15 @@ for real-machine verification, not user-facing documentation.
 > dispatch with another module's would let a restore silently invalidate a fixture another
 > module's row is mid-way through relying on.
 
-> **Correction to this module's plan-stage description:** the plan that produced this checklist
-> described UltiBackup's restore path as overwriting "world data". Reading the source
+> **Correction to an earlier description of this module:** it described UltiBackup's restore
+> path as overwriting "world data". Reading the source
 > (`BackupContent#restoreToPlayer`, `BackupService#restoreBackup`/`#forceRestore`) shows the
 > actual destructive target is narrower and different in kind: a restore replaces the TARGET
 > PLAYER'S OWN inventory/armor/off-hand/ender-chest/experience — it never touches world terrain,
 > blocks, or any other player's state. Every Preconditions cell below is scoped to that real
 > hazard (a disposable test player's own current items) rather than to world data, which this
 > module's restore path cannot reach at all. As a defense-in-depth discipline anyway (this
-> module cannot reach world terrain, but the same scratch/throwaway-fixture rule the plan applies
+> module cannot reach world terrain, but the same scratch/throwaway-fixture rule that applies
 > to genuinely world-destructive modules is followed here too): every fixture below (`Tester1`,
 > `Tester2`, `Tester3`) must be a throwaway, scratch, disposable test-only player identity, and every backup
 > exercised by a restore or force-restore row must itself be a scratch backup created by an
