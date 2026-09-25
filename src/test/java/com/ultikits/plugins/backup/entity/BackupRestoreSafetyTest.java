@@ -572,13 +572,30 @@ class BackupRestoreSafetyTest {
     @DisplayName("A part stored as anything but text is refused at load")
     void partThatIsNotTextIsRefused() throws Exception {
         for (String part : new String[] {"inventory", "armor", "offhand", "enderchest"}) {
-            File file = savedBackupEditedAs("section-" + part + ".yml", yaml -> {
+            File section = savedBackupEditedAs("section-" + part + ".yml", yaml -> {
                 yaml.set(part, null);
                 yaml.createSection(part).set("items.0", "not text");
             });
+            File number = savedBackupEditedAs("number-" + part + ".yml", yaml -> yaml.set(part, 7));
+            File list = savedBackupEditedAs("list-" + part + ".yml",
+                    yaml -> yaml.set(part, java.util.Arrays.asList("a", "b")));
 
-            assertThatThrownBy(() -> BackupContent.loadFromFile(file)).as(part).isInstanceOf(IOException.class);
+            assertThatThrownBy(() -> BackupContent.loadFromFile(section)).as(part).isInstanceOf(IOException.class);
+            assertThatThrownBy(() -> BackupContent.loadFromFile(number)).as(part).isInstanceOf(IOException.class);
+            assertThatThrownBy(() -> BackupContent.loadFromFile(list)).as(part).isInstanceOf(IOException.class);
         }
+    }
+
+    @Test
+    @DisplayName("saveToFile never writes a shape loadFromFile refuses: armor with no off-hand text writes an empty hand")
+    void armorWithNullOffhandSavesAsEmptyHand() throws Exception {
+        File file = tempDir.resolve("armor-null-offhand.yml").toFile();
+        BackupContent.builder().inventoryContents("").armorContents("").expLevel(3).build().saveToFile(file);
+
+        BackupContent loaded = BackupContent.loadFromFile(file);
+
+        assertThat(loaded.getArmorContents()).isEmpty();
+        assertThat(loaded.getOffhandItem()).as("an empty hand, written as blank text").isEmpty();
     }
 
     @Test

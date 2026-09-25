@@ -524,7 +524,6 @@ class BackupServiceTest {
             BackupContent original = BackupContent.builder()
                     .inventoryContents("load-inv")
                     .armorContents("load-armor")
-                    .offhandItem("load-offhand")
                     .expLevel(20)
                     .build();
             File backupFile = tempDir.resolve("load_test.yml").toFile();
