@@ -263,7 +263,8 @@ public class BackupContent {
      * Restore content to player.
      * <p>
      * Every part the restore will apply is read back first. If any part whose stored text is not
-     * blank cannot be read back, this throws {@link UnreadablePartException} before anything is
+     * blank cannot be read back, or, when experience is restored, the level is negative or the
+     * progress is outside 0-1, this throws {@link UnreadablePartException} before anything is
      * cleared or applied, so the player's inventory is left exactly as it was
      * (UltiKits/UltiBackup#21). A blank part is a part that was genuinely empty when it was backed
      * up, and is restored as empty, as before.
@@ -291,6 +292,16 @@ public class BackupContent {
         ItemStack[] enderChest = null;
         if (restoreEnderchest && enderchestContents != null) {
             enderChest = readItems(enderchestContents, PART_ENDERCHEST);
+        }
+        // The server refuses a negative level and a progress outside 0-1 (NaN included), and those
+        // calls come last, after the inventories are replaced: check them here, before anything.
+        if (restoreExp) {
+            if (expLevel < 0) {
+                throw new UnreadablePartException(PART_EXP_LEVEL, null);
+            }
+            if (!(expProgress >= 0.0f && expProgress <= 1.0f)) {
+                throw new UnreadablePartException(PART_EXP_PROGRESS, null);
+            }
         }
 
         // Clear what the restore replaces. PlayerInventory#clear() empties armor and off-hand too, so
@@ -549,11 +560,16 @@ public class BackupContent {
     public static final String PART_OFFHAND = "offhand";
     /** Stored key of the ender chest part, as written in the backup file. */
     public static final String PART_ENDERCHEST = "enderchest";
+    /** Stored key of the experience level, checked only when a restore applies experience. */
+    public static final String PART_EXP_LEVEL = "expLevel";
+    /** Stored key of the experience progress, checked only when a restore applies experience. */
+    public static final String PART_EXP_PROGRESS = "expProgress";
 
     /**
-     * A part of a backup whose stored text is not blank but cannot be read back into items.
+     * A part of a backup whose stored text is not blank but cannot be read back into items, or,
+     * when a restore applies experience, an experience value the server would refuse.
      * <p>
-     * 备份中非空但无法读取为物品的部分。
+     * 备份中非空但无法读取为物品的部分；或在恢复经验时，服务器会拒绝的经验值。
      */
     public static class UnreadablePartException extends RuntimeException {
 
@@ -563,7 +579,8 @@ public class BackupContent {
 
         /**
          * @param part  the part's stored key ({@link #PART_INVENTORY}, {@link #PART_ARMOR},
-         *              {@link #PART_OFFHAND} or {@link #PART_ENDERCHEST})
+         *              {@link #PART_OFFHAND}, {@link #PART_ENDERCHEST}, {@link #PART_EXP_LEVEL} or
+         *              {@link #PART_EXP_PROGRESS})
          * @param cause what the reader threw, or {@code null} when the text parsed but held no item
          */
         public UnreadablePartException(String part, Throwable cause) {
