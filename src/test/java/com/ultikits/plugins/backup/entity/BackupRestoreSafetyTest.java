@@ -252,7 +252,7 @@ class BackupRestoreSafetyTest {
     }
 
     @Test
-    @DisplayName("An armor part with a slot beyond the four armor slots is refused before anything changes (gate-1 IN-02)")
+    @DisplayName("An armor part with a slot beyond the four armor slots is refused before anything changes")
     void armorSlotBeyondTheArmorSlotsChangesNothing() {
         BackupContent content = backupOfBackedUpState();
         content.setArmorContents("items:\n  '4':\n" + itemYaml(new ItemStack(Material.IRON_BOOTS)));
@@ -266,7 +266,7 @@ class BackupRestoreSafetyTest {
     }
 
     @Test
-    @DisplayName("An ender chest part with a slot beyond its 27 slots is refused before anything changes (gate-1 IN-02)")
+    @DisplayName("An ender chest part with a slot beyond its 27 slots is refused before anything changes")
     void enderchestSlotBeyondItsSizeChangesNothing() {
         BackupContent content = backupOfBackedUpState();
         content.setEnderchestContents("items:\n  '27':\n" + itemYaml(new ItemStack(Material.EMERALD)));
@@ -280,7 +280,7 @@ class BackupRestoreSafetyTest {
     }
 
     @Test
-    @DisplayName("An inventory part with a slot beyond the 36 storage slots is refused before anything changes (gate-1 IN-02)")
+    @DisplayName("An inventory part with a slot beyond the 36 storage slots is refused before anything changes")
     void inventorySlotBeyondStorageChangesNothing() {
         BackupContent content = backupOfBackedUpState();
         content.setInventoryContents("items:\n  '36':\n" + itemYaml(new ItemStack(Material.DIAMOND)));
@@ -362,7 +362,7 @@ class BackupRestoreSafetyTest {
     }
 
     @Test
-    @DisplayName("A backup taken without armor, restored with armor on, keeps the worn armor and off-hand (UltiBackup#25, gate-1 R2-WR-01)")
+    @DisplayName("A backup taken without armor, restored with armor on, keeps the worn armor and off-hand (UltiBackup#25)")
     void backupWithoutArmorRestoredWithArmorOnKeepsWornArmor() throws Exception {
         File file = tempDir.resolve("taken-without-armor.yml").toFile();
         giveBackedUpState();
@@ -477,7 +477,7 @@ class BackupRestoreSafetyTest {
     }
 
     @Test
-    @DisplayName("forceRestore of a file cut off after its inventory block answers LOAD_FAILED and changes nothing (gate-1 WR-01)")
+    @DisplayName("forceRestore of a file cut off after its inventory block answers LOAD_FAILED and changes nothing")
     void forceRestoreOfFileTruncatedAfterInventoryFails() throws Exception {
         File file = tempDir.resolve("cut.yml").toFile();
         backupOfBackedUpState().saveToFile(file);
