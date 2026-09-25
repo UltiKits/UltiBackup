@@ -189,8 +189,11 @@ public class BackupContent {
 
         return BackupContent.builder()
             .inventoryContents(yaml.getString("inventory", ""))
-            .armorContents(yaml.getString("armor", ""))
-            .offhandItem(yaml.getString("offhand", ""))
+            // No default: a missing armor or off-hand key means the backup was taken without armor
+            // (backup_armor: false writes neither key), which a restore must tell apart from armor that
+            // was empty when it was taken (written as '') (UltiKits/UltiBackup#25).
+            .armorContents(yaml.getString("armor"))
+            .offhandItem(yaml.getString("offhand"))
             .enderchestContents(yaml.getString("enderchest", ""))
             .expLevel(yaml.getInt("expLevel", 0))
             .expProgress((float) yaml.getDouble("expProgress", 0.0))
@@ -291,9 +294,10 @@ public class BackupContent {
         }
 
         // Clear what the restore replaces. PlayerInventory#clear() empties armor and off-hand too, so
-        // when armor is not restored only the storage slots are cleared: otherwise the armor and
-        // off-hand the player is wearing would be destroyed and nothing put back (UltiKits/UltiBackup#25).
-        if (restoreArmor) {
+        // unless this restore applies an armor part -- armor restored AND the backup has one -- only the
+        // storage slots are cleared: otherwise the armor and off-hand the player is wearing would be
+        // destroyed and nothing put back (UltiKits/UltiBackup#25).
+        if (restoreArmor && armorContents != null) {
             player.getInventory().clear();
         } else {
             player.getInventory().setStorageContents(new ItemStack[player.getInventory().getStorageContents().length]);
