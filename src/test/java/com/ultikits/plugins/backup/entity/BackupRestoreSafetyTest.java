@@ -395,6 +395,102 @@ class BackupRestoreSafetyTest {
         assertThat(player.getInventory().getItemInOffHand().getType().isAir()).isTrue();
     }
 
+    // ==================== Experience values the server would refuse ====================
+    // Player#setLevel refuses a negative level and Player#setExp a progress outside 0-1 (NaN
+    // included), and both run after the inventories are replaced, so they are checked before
+    // anything is cleared.
+
+    @Test
+    @DisplayName("A negative experience level is refused before anything changes")
+    void negativeExpLevelChangesNothing() {
+        BackupContent content = backupOfBackedUpState();
+        content.setExpLevel(-1);
+        giveCurrentState();
+
+        assertThatThrownBy(() -> content.restoreToPlayer(player, true, true, true))
+                .isInstanceOf(BackupContent.UnreadablePartException.class)
+                .extracting(e -> ((BackupContent.UnreadablePartException) e).getPart())
+                .isEqualTo("expLevel");
+        assertCurrentStateUnchanged();
+    }
+
+    @Test
+    @DisplayName("Experience progress above 1 is refused before anything changes")
+    void expProgressAboveOneChangesNothing() {
+        BackupContent content = backupOfBackedUpState();
+        content.setExpProgress(1.5f);
+        giveCurrentState();
+
+        assertThatThrownBy(() -> content.restoreToPlayer(player, true, true, true))
+                .isInstanceOf(BackupContent.UnreadablePartException.class)
+                .extracting(e -> ((BackupContent.UnreadablePartException) e).getPart())
+                .isEqualTo("expProgress");
+        assertCurrentStateUnchanged();
+    }
+
+    @Test
+    @DisplayName("Negative or NaN experience progress is refused before anything changes")
+    void expProgressNegativeOrNanChangesNothing() {
+        for (float progress : new float[] {-0.25f, Float.NaN}) {
+            BackupContent content = backupOfBackedUpState();
+            content.setExpProgress(progress);
+            giveCurrentState();
+
+            assertThatThrownBy(() -> content.restoreToPlayer(player, true, true, true))
+                    .as("progress %s", progress)
+                    .isInstanceOf(BackupContent.UnreadablePartException.class)
+                    .extracting(e -> ((BackupContent.UnreadablePartException) e).getPart())
+                    .isEqualTo("expProgress");
+            assertCurrentStateUnchanged();
+        }
+    }
+
+    @Test
+    @DisplayName("Control: experience values at the edges of the range restore")
+    void expValuesAtTheEdgesRestore() {
+        BackupContent content = backupOfBackedUpState();
+        content.setExpLevel(0);
+        content.setExpProgress(1.0f);
+        giveCurrentState();
+
+        content.restoreToPlayer(player, true, true, true);
+
+        assertThat(player.getLevel()).isZero();
+        assertThat(player.getExp()).isEqualTo(1.0f);
+        assertThat(player.getInventory().getItem(0)).isEqualTo(new ItemStack(Material.DIAMOND, 3));
+    }
+
+    @Test
+    @DisplayName("With experience not restored, a bad experience value does not refuse the restore")
+    void badExpValueNotRestoredDoesNotRefuse() {
+        BackupContent content = backupOfBackedUpState();
+        content.setExpLevel(-1);
+        giveCurrentState();
+
+        content.restoreToPlayer(player, true, true, false);
+
+        assertThat(player.getInventory().getItem(0)).isEqualTo(new ItemStack(Material.DIAMOND, 3));
+        assertThat(player.getLevel()).as("experience was not part of this restore").isEqualTo(30);
+    }
+
+    @Test
+    @DisplayName("Through forceRestore, a negative experience level reports failure and changes nothing")
+    void forceRestoreWithNegativeExpLevelFailsAndChangesNothing() throws Exception {
+        File file = tempDir.resolve("negative-level.yml").toFile();
+        giveBackedUpState();
+        BackupContent backup = BackupContent.fromPlayer(player, true, true, true);
+        backup.setExpLevel(-3);
+        backup.saveToFile(file);
+        BackupMetadata[] metadata = new BackupMetadata[1];
+        BackupService service = serviceWith(file, metadata);
+        giveCurrentState();
+
+        BackupService.RestoreResult result = service.forceRestore(player, metadata[0]);
+
+        assertThat(result).isEqualTo(BackupService.RestoreResult.RESTORE_FAILED);
+        assertCurrentStateUnchanged();
+    }
+
     /** One item as the module's own serializer writes it under an items.N key, indented for that key. */
     private static String itemYaml(ItemStack item) {
         org.bukkit.configuration.file.YamlConfiguration yaml = new org.bukkit.configuration.file.YamlConfiguration();
