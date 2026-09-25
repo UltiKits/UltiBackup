@@ -176,7 +176,9 @@ class BackupContentTest {
             File file = tempDir.resolve("minimal-with-inventory.yml").toFile();
             try (BufferedWriter w = new BufferedWriter(
                     new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
-                w.write("inventory: ''\nsomeOtherKey: value\n");
+                // inventory and expProgress are the first and last keys every saved file carries;
+                // everything between them may be missing and defaults.
+                w.write("inventory: ''\nsomeOtherKey: value\nexpProgress: 0.0\n");
             }
 
             BackupContent loaded = BackupContent.loadFromFile(file);
