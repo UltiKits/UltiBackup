@@ -380,7 +380,7 @@ class UltiBackupCjkLiteralScopeTest {
         }
 
         @Test
-        @DisplayName("each occurrence of an exempted literal needs its own line (Codex, UltiBackup#22)")
+        @DisplayName("each occurrence of an exempted literal needs its own line")
         void eachOccurrenceNeedsItsOwnExemption() {
             String body = "String a = \"\u4e2d\"; String b = \"\u4e2d\";";
             List<String> one = Collections.singletonList("src/main/java/Sample.java\t\u4e2d\tfile header");
@@ -442,7 +442,7 @@ class UltiBackupCjkLiteralScopeTest {
         }
 
         @Test
-        @DisplayName("the skip is bound to the field and the annotation the compiler resolved, not to matching text (Codex, UltiBackup#22)")
+        @DisplayName("the skip is bound to the field and the annotation the compiler resolved, not to matching text")
         void skipIsBoundToTheResolvedAnnotation() {
             SourceFile f = SourceFile.of("src/main/java/Sample.java", "class Sample {\n"
                     + "@ConfigEntry(path = \"a\", comment = \"\u4e2d\u6587\u8bf4\u660e\") String a;\n"
