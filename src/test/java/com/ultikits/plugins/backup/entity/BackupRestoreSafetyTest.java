@@ -280,6 +280,22 @@ class BackupRestoreSafetyTest {
         assertCurrentStateUnchanged();
     }
 
+    @Test
+    @DisplayName("The preview reads each part with that part's own slot range (Codex P2 on #26)")
+    void previewGettersUseEachPartsCapacity() {
+        BackupContent content = backupOfBackedUpState();
+        content.setArmorContents("items:\n  '4':\n" + itemYaml(new ItemStack(Material.IRON_BOOTS)));
+        content.setEnderchestContents("items:\n  '30':\n" + itemYaml(new ItemStack(Material.EMERALD)));
+
+        assertThat(content.getArmorItems())
+                .as("an armor slot outside the four armor slots is unreadable here too, as findUnreadablePart says")
+                .isNull();
+        assertThat(content.getEnderchestItems())
+                .as("an ender chest slot outside its 27 slots is unreadable here too")
+                .isNull();
+        assertThat(content.getInventoryItems()).as("control: the inventory part still reads").isNotNull();
+    }
+
     /** One item as the module's own serializer writes it under an items.N key, indented for that key. */
     private static String itemYaml(ItemStack item) {
         org.bukkit.configuration.file.YamlConfiguration yaml = new org.bukkit.configuration.file.YamlConfiguration();
