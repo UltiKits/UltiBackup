@@ -1,0 +1,6 @@
+# Language guard 2 exemptions: Chinese text in a src/main/java literal that is deliberately not routed
+# through the language catalogue. One line per literal, three tab-separated fields:
+#   path (relative to the module root) <TAB> the literal exactly as written between its quotes <TAB> reason
+# Every line needs a reason. A line that no longer matches a literal fails the build (UltiBackupCjkLiteralScopeTest).
+src/main/java/com/ultikits/plugins/backup/entity/BackupContent.java	# DO NOT MODIFY THIS FILE! 请勿修改此文件！\n	Header written at the top of every backup data file under plugins/UltiTools/backups/; deliberately bilingual and independent of the server language so a file reads the same whichever language wrote it; not chat or console output; checksum verification skips '#' lines
+src/main/java/com/ultikits/plugins/backup/entity/BackupContent.java	# 任何修改都会导致校验和验证失败，备份将无法恢复\n	Header written at the top of every backup data file under plugins/UltiTools/backups/; deliberately bilingual and independent of the server language so a file reads the same whichever language wrote it; not chat or console output; checksum verification skips '#' lines

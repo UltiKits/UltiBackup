@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @DisplayName("UltiBackup Main Class Tests")
@@ -20,12 +21,13 @@ class UltiBackupTest {
         UltiBackup plugin = mock(UltiBackup.class);
         PluginLogger logger = mock(PluginLogger.class);
         when(plugin.getLogger()).thenReturn(logger);
+        when(plugin.i18n(anyString())).thenAnswer(inv -> inv.getArgument(0));
         when(plugin.registerSelf()).thenCallRealMethod();
 
         boolean result = plugin.registerSelf();
 
         assertThat(result).isTrue();
-        verify(logger).info("UltiBackup has been enabled!");
+        verify(logger).info("backup.log.enabled");
     }
 
     @Test

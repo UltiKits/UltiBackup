@@ -74,7 +74,7 @@ public class BackupCommand extends BaseCommandExecutor {
             player.sendMessage(i18n("backup.message.list_item")
                 .replace("{NUMBER}", String.valueOf(i + 1))
                 .replace("{TIME}", backup.getFormattedTime())
-                .replace("{REASON}", backup.getReasonDisplay()));
+                .replace("{REASON}", backup.getReasonDisplay(plugin)));
         }
         if (backups.size() > 5) {
             player.sendMessage(i18n("backup.message.list_more")

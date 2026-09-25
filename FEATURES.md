@@ -106,9 +106,8 @@ reading `BackupCommand.java` directly (9 `@CmdMapping` sites at lines 51, 62, 90
 171, 196, 228: `` (bare), `list`, `create`, `restore <number>`, `restore <number> force`,
 `saveall`, `admin <player>`, `admin create <player>`, `help`) and `BackupConfig.java` (8
 `@ConfigEntry` sites at lines 24, 28, 31, 34, 38, 41, 44, 47). The `find`-based GUI-class count
-above returns 3, matching Phase 9's own independently-derived GUI-exclusion register for this
-module (`BackupGUI`, `BackupPreviewGUI`, `ForceRestoreConfirmPage` — see
-`.planning/phases/09-module-ecosystem-readiness-and-test-coverage/gui-exclusions/UltiBackup.md`),
+above returns 3, matching the module's independently-derived list of GUI classes excluded
+from the coverage gate (`BackupGUI`, `BackupPreviewGUI`, `ForceRestoreConfirmPage`),
 confirmed by reading all three files directly. This document's command-row count matches the
 `@CmdMapping` annotation-site count exactly (9 against 9) — unlike the framework's own
 `/upm`/`/ulticloud` sections, this module has no bare-`help`-argument `@CmdMapping`-free dispatch
@@ -150,8 +149,9 @@ line states the true handler-method count (4) against the row count actually att
 ## GUI
 
 Three GUI page classes, none carrying a page-marking annotation — identified structurally (see
-Conventions' own reconciliation note for this Kind). All three are Phase 9's complete
-GUI-exclusion register for this module; each is named on exactly one row below and again in its
+Conventions' own reconciliation note for this Kind). All three are the complete set of this
+module's GUI classes excluded from the coverage gate; each is named on exactly one row below
+and again in its
 `UAT-CHECKLIST.md` Covers cell.
 
 | ID | Feature | Kind | How to reach | Permission | Target | Tier | Manual | Source |
@@ -182,7 +182,7 @@ the same `BackupConfig` instance the container injected into `BackupService`, an
 reads its getters at call time, so `/ul reload UltiBackup` (or bare `/ul reload`, which reloads every
 module) changes what the next backup does. The row is `event`-Kind because the reload is a framework
 command, not one this repository maps. `ultibackup.lifecycle.reload` supersedes
-`ultibackup.event.module-reload` (retired with `UltiKits/UltiBackup#14`; its Phase 10 verdict recorded
+`ultibackup.event.module-reload` (retired with `UltiKits/UltiBackup#14`; its earlier checklist verdict recorded
 the defect, not this behaviour).
 
 | ID | Feature | Kind | How to reach | Permission | Target | Tier | Manual | Source |
@@ -210,14 +210,12 @@ keys or UltiChat's five shipped config files, `BackupConfig`'s file is generated
 these `@ConfigEntry` field defaults the first time the module boots, with no packaged seed
 resource to diff against.
 
-**One key is declared and validated but its own display method never reads it correctly:**
-`getReasonDisplay()` (the method every `backup.reason.*`-consuming row would call) returns the
-raw, untranslated reason constant instead of looking up one of the six `backup.reason.*` language
-keys — a known product defect, `UltiKits/UltiBackup#15`, not fixed here per this phase's
-zero-new-code rule. This is a language-catalogue defect, not a `@ConfigEntry` defect, so it has
-no row in this section; it is called out here because every config row above documents inclusion
-toggles that feed backup CONTENT, and this is the one place a reader might expect the reason
-label to be config-adjacent and find it is not.
+**The six `backup.reason.*` language keys are not configuration.** They label a backup's stored
+reason in `/backup list`, the backup browser's lore and the backup preview's info panel, in the
+server's `language` (`BackupMetadata#getReasonKey`, `#getReasonDisplay`). They are called out here
+because every config row above documents inclusion toggles that feed backup CONTENT, and this is the
+one place a reader might expect the reason label to be config-adjacent and find it is not. Before
+`UltiKits/UltiBackup#15` the display method returned the raw constant, so these keys were never used.
 
 | ID | Feature | Kind | How to reach | Permission | Target | Tier | Manual | Source |
 |---|---|---|---|---|---|---|---|---|

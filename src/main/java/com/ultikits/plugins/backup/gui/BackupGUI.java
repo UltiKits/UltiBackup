@@ -90,7 +90,7 @@ public class BackupGUI implements InventoryHolder {
             meta.setDisplayName(ChatColor.GOLD + backup.getFormattedTime());
             
             List<String> lore = new ArrayList<>();
-            lore.add(i18n("backup.gui.reason").replace("{REASON}", backup.getReasonDisplay()));
+            lore.add(i18n("backup.gui.reason").replace("{REASON}", backup.getReasonDisplay(plugin)));
             lore.add(i18n("backup.gui.world").replace("{WORLD}", backup.getWorldName()));
             lore.add(i18n("backup.gui.location").replace("{LOCATION}", 
                 String.format("%.1f, %.1f, %.1f", 

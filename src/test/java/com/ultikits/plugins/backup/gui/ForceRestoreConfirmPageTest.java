@@ -137,9 +137,22 @@ class ForceRestoreConfirmPageTest {
             InventoryClickEvent event = createClickEvent(viewer);
             page.onConfirm(event);
 
-            verify(UltiBackupTestHelper.getMockLogger()).warn(
-                    argThat((String msg) -> msg.contains("force-restored")
-                            && msg.contains("Admin") && msg.contains("Target")));
+            verify(UltiBackupTestHelper.getMockLogger()).warn("backup.log.force_restored");
+        }
+
+        @Test
+        @DisplayName("Should fill the warning's placeholders from the language file's line")
+        void logsWarningWithPlaceholdersFilled() {
+            when(plugin.i18n("backup.log.force_restored")).thenReturn("{ADMIN}|{ID}|{PLAYER}");
+            ForceRestoreConfirmPage page = new ForceRestoreConfirmPage(
+                    plugin, viewer, metadata, backupService, target);
+
+            when(backupService.forceRestore(target, metadata))
+                    .thenReturn(BackupService.RestoreResult.SUCCESS);
+
+            page.onConfirm(createClickEvent(viewer));
+
+            verify(UltiBackupTestHelper.getMockLogger()).warn("Admin|force-restore-id|Target");
         }
 
         @Test

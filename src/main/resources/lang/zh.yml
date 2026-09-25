@@ -87,3 +87,14 @@ backup.help.restore_force: "§e/backup restore <编号> force §f- 强制恢复�
 backup.help.saveall: "§e/backup saveall §f- 保存所有在线玩家 (管理员)"
 backup.help.admin: "§e/backup admin <玩家> §f- 查看玩家备份 (管理员)"
 backup.help.admin_create: "§e/backup admin create <玩家> §f- 为玩家创建备份 (管理员)"
+
+# 控制台日志
+backup.log.enabled: "UltiBackup 已启用！"
+backup.log.created: "已为 {PLAYER} 创建备份：{FILE}"
+backup.log.create_failed: "为 {PLAYER} 创建备份失败"
+backup.log.verify_failed: "无法校验备份的校验和：{ID}"
+backup.log.load_failed: "无法加载备份内容：{ID}"
+backup.log.restored: "已将备份 {ID} 恢复给玩家 {PLAYER}"
+backup.log.restore_failed: "将备份 {ID} 恢复给 {PLAYER} 失败"
+backup.log.auto_completed: "自动备份完成：{COUNT} 名玩家"
+backup.log.force_restored: "玩家 {ADMIN} 将已损坏的备份 {ID} 强制恢复给 {PLAYER}"
