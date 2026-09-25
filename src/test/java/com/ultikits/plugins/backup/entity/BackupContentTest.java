@@ -448,10 +448,10 @@ class BackupContentTest {
     class RestoreToPlayer {
 
         @Test
-        @DisplayName("Should clear the whole inventory before a restore that restores armor")
+        @DisplayName("Should clear the whole inventory before a restore that restores an armor part")
         void clearsInventory() {
             Player player = UltiBackupTestHelper.createMockPlayer("P", UUID.randomUUID());
-            BackupContent content = BackupContent.builder().build();
+            BackupContent content = BackupContent.builder().armorContents("").build();
 
             content.restoreToPlayer(player, true, false, false);
 
@@ -532,6 +532,7 @@ class BackupContentTest {
             Player player = UltiBackupTestHelper.createMockPlayer("P", UUID.randomUUID());
             BackupContent content = BackupContent.builder()
                     .inventoryContents(null)
+                    .armorContents("")
                     .build();
 
             content.restoreToPlayer(player, true, true, true);
