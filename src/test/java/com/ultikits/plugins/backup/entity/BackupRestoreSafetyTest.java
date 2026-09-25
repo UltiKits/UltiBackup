@@ -166,7 +166,7 @@ class BackupRestoreSafetyTest {
     }
 
     @Test
-    @DisplayName("Inventory text with an empty items section: nothing is cleared or applied (Codex P2 on #26)")
+    @DisplayName("Inventory text with an empty items section: nothing is cleared or applied")
     void inventoryWithEmptyItemsSectionChangesNothing() {
         // serializeItems writes an empty part as blank text, never as an empty section.
         BackupContent content = backupOfBackedUpState();
@@ -294,7 +294,7 @@ class BackupRestoreSafetyTest {
     }
 
     @Test
-    @DisplayName("The preview reads each part with that part's own slot range (Codex P2 on #26)")
+    @DisplayName("The preview reads each part with that part's own slot range")
     void previewGettersUseEachPartsCapacity() {
         BackupContent content = backupOfBackedUpState();
         content.setArmorContents("items:\n  '4':\n" + itemYaml(new ItemStack(Material.IRON_BOOTS)));
