@@ -502,6 +502,112 @@ class BackupRestoreSafetyTest {
         assertCurrentStateUnchanged();
     }
 
+    // ==================== A file whose keys saveToFile could not have written ====================
+    // loadFromFile's typed getters turn a missing or mistyped key into a default ("" or 0), which a
+    // restore would then apply. saveToFile writes the four parts as text, armor and off-hand together
+    // or not at all, and both experience values as numbers, always; any other shape is refused as a
+    // load failure before anything is restored.
+
+    /** Saves the backed-up state (armor, ender chest and experience on) and edits the saved YAML. */
+    private File savedBackupEditedAs(String name, java.util.function.Consumer<org.bukkit.configuration.file.YamlConfiguration> edit)
+            throws Exception {
+        File file = tempDir.resolve(name).toFile();
+        backupOfBackedUpState().saveToFile(file);
+        org.bukkit.configuration.file.YamlConfiguration yaml = new org.bukkit.configuration.file.YamlConfiguration();
+        yaml.load(file);
+        edit.accept(yaml);
+        yaml.save(file);
+        return file;
+    }
+
+    @Test
+    @DisplayName("Armor without its off-hand key is refused at load: the worn off-hand is kept")
+    void armorWithoutOffhandKeyIsRefused() throws Exception {
+        File file = savedBackupEditedAs("armor-no-offhand.yml", yaml -> yaml.set("offhand", null));
+
+        assertThatThrownBy(() -> BackupContent.loadFromFile(file)).isInstanceOf(IOException.class);
+
+        BackupMetadata[] metadata = new BackupMetadata[1];
+        BackupService service = serviceWith(file, metadata);
+        giveCurrentState();
+        assertThat(service.forceRestore(player, metadata[0])).isEqualTo(BackupService.RestoreResult.LOAD_FAILED);
+        assertCurrentStateUnchanged();
+    }
+
+    @Test
+    @DisplayName("An off-hand key without armor is refused at load")
+    void offhandWithoutArmorKeyIsRefused() throws Exception {
+        File file = savedBackupEditedAs("offhand-no-armor.yml", yaml -> yaml.set("armor", null));
+
+        assertThatThrownBy(() -> BackupContent.loadFromFile(file)).isInstanceOf(IOException.class);
+    }
+
+    @Test
+    @DisplayName("A missing or non-integer experience level is refused at load")
+    void missingOrMalformedExpLevelIsRefused() throws Exception {
+        File missing = savedBackupEditedAs("no-level.yml", yaml -> yaml.set("expLevel", null));
+        File broken = savedBackupEditedAs("broken-level.yml", yaml -> yaml.set("expLevel", "broken"));
+        File fraction = savedBackupEditedAs("fraction-level.yml", yaml -> yaml.set("expLevel", 5.5));
+
+        assertThatThrownBy(() -> BackupContent.loadFromFile(missing)).isInstanceOf(IOException.class);
+        assertThatThrownBy(() -> BackupContent.loadFromFile(broken)).isInstanceOf(IOException.class);
+        assertThatThrownBy(() -> BackupContent.loadFromFile(fraction)).isInstanceOf(IOException.class);
+
+        BackupMetadata[] metadata = new BackupMetadata[1];
+        BackupService service = serviceWith(broken, metadata);
+        giveCurrentState();
+        assertThat(service.forceRestore(player, metadata[0])).isEqualTo(BackupService.RestoreResult.LOAD_FAILED);
+        assertCurrentStateUnchanged();
+    }
+
+    @Test
+    @DisplayName("A non-numeric experience progress is refused at load")
+    void malformedExpProgressIsRefused() throws Exception {
+        File file = savedBackupEditedAs("broken-progress.yml", yaml -> yaml.set("expProgress", "broken"));
+
+        assertThatThrownBy(() -> BackupContent.loadFromFile(file)).isInstanceOf(IOException.class);
+    }
+
+    @Test
+    @DisplayName("A part stored as anything but text is refused at load")
+    void partThatIsNotTextIsRefused() throws Exception {
+        for (String part : new String[] {"inventory", "armor", "offhand", "enderchest"}) {
+            File file = savedBackupEditedAs("section-" + part + ".yml", yaml -> {
+                yaml.set(part, null);
+                yaml.createSection(part).set("items.0", "not text");
+            });
+
+            assertThatThrownBy(() -> BackupContent.loadFromFile(file)).as(part).isInstanceOf(IOException.class);
+        }
+    }
+
+    @Test
+    @DisplayName("Control: every shape saveToFile writes still loads and restores")
+    void everyShapeSaveToFileWritesLoads() throws Exception {
+        giveBackedUpState();
+        for (boolean armor : new boolean[] {true, false}) {
+            for (boolean enderchest : new boolean[] {true, false}) {
+                for (boolean exp : new boolean[] {true, false}) {
+                    File file = tempDir.resolve("shape-" + armor + enderchest + exp + ".yml").toFile();
+                    BackupContent.fromPlayer(player, armor, enderchest, exp).saveToFile(file);
+
+                    BackupContent loaded = BackupContent.loadFromFile(file);
+
+                    assertThat(loaded.getInventoryItems()).as("%s %s %s", armor, enderchest, exp).isNotNull();
+                }
+            }
+        }
+        player.getInventory().clear();
+        player.getEnderChest().clear();
+        File empty = tempDir.resolve("shape-empty.yml").toFile();
+        BackupContent.fromPlayer(player, true, true, true).saveToFile(empty);
+        assertThat(BackupContent.loadFromFile(empty).getInventoryContents()).as("an empty inventory still loads").isEmpty();
+
+        File wholeNumberProgress = savedBackupEditedAs("progress-zero.yml", yaml -> yaml.set("expProgress", 0));
+        assertThat(BackupContent.loadFromFile(wholeNumberProgress).getExpProgress())
+                .as("a progress written as a whole number is still a number").isZero();
+    }
+
     /** One item as the module's own serializer writes it under an items.N key, indented for that key. */
     private static String itemYaml(ItemStack item) {
         org.bukkit.configuration.file.YamlConfiguration yaml = new org.bukkit.configuration.file.YamlConfiguration();
