@@ -463,7 +463,10 @@ public class BackupContent {
             YamlConfiguration yaml = new YamlConfiguration();
             yaml.loadFromString(data);
 
-            if (!yaml.isConfigurationSection("items")) {
+            // serializeItems writes an empty part as blank text, so an items section with no entries is
+            // damaged data, not an empty part.
+            if (!yaml.isConfigurationSection("items")
+                    || yaml.getConfigurationSection("items").getKeys(false).isEmpty()) {
                 throw new UnreadablePartException(part, null);
             }
 
