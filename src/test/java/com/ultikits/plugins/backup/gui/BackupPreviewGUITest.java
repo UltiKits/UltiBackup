@@ -265,6 +265,36 @@ class BackupPreviewGUITest {
 
             verify(viewer).openInventory(any(Inventory.class));
         }
+
+        @Test
+        @DisplayName("Should log, through the language files, a part that cannot be read (UltiBackup#21)")
+        void logsUnreadablePart() {
+            // This class's shared content holds placeholder text ("inv-data", ...) in every part,
+            // which no reader can turn back into items.
+            BackupService backupService = mock(BackupService.class);
+            when(backupService.loadBackupContent(metadata)).thenReturn(content);
+
+            BackupPreviewGUI.open(plugin, viewer, metadata, backupService);
+
+            verify(UltiBackupTestHelper.getMockLogger()).warn(
+                    any(BackupContent.UnreadablePartException.class),
+                    org.mockito.ArgumentMatchers.contains("backup.log.preview_unreadable"));
+            verify(viewer).openInventory(any(Inventory.class));
+        }
+
+        @Test
+        @DisplayName("Control: a backup whose parts are all blank logs nothing")
+        void readableContentLogsNothing() {
+            BackupService backupService = mock(BackupService.class);
+            when(backupService.loadBackupContent(metadata)).thenReturn(BackupContent.builder()
+                    .inventoryContents("").armorContents("").offhandItem("").enderchestContents("")
+                    .build());
+
+            BackupPreviewGUI.open(plugin, viewer, metadata, backupService);
+
+            verify(UltiBackupTestHelper.getMockLogger(), never()).warn(
+                    any(Throwable.class), anyString());
+        }
     }
 
     // ==================== Tab Switching Full Coverage ====================

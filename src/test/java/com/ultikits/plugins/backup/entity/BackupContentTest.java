@@ -156,12 +156,27 @@ class BackupContentTest {
         }
 
         @Test
-        @DisplayName("Should load defaults for missing fields")
-        void loadDefaults() throws IOException {
+        @DisplayName("Should refuse a file with no inventory key (not a backup this module wrote)")
+        void refusesFileWithoutInventory() throws IOException {
+            // Every file saveToFile writes carries the inventory key. A file without it -- one
+            // truncated to nothing, or not a backup at all -- used to load as all-blank, and a
+            // restore then cleared the player's inventory and reported success (UltiBackup#21).
             File file = tempDir.resolve("minimal.yml").toFile();
             try (BufferedWriter w = new BufferedWriter(
                     new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
                 w.write("someOtherKey: value\n");
+            }
+
+            assertThatThrownBy(() -> BackupContent.loadFromFile(file)).isInstanceOf(IOException.class);
+        }
+
+        @Test
+        @DisplayName("Should load defaults for missing fields")
+        void loadDefaults() throws IOException {
+            File file = tempDir.resolve("minimal-with-inventory.yml").toFile();
+            try (BufferedWriter w = new BufferedWriter(
+                    new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
+                w.write("inventory: ''\nsomeOtherKey: value\n");
             }
 
             BackupContent loaded = BackupContent.loadFromFile(file);
@@ -713,16 +728,18 @@ class BackupContentTest {
     class RestoreDeserializationFailures {
 
         @Test
-        @DisplayName("Should handle invalid inventory data gracefully")
+        @DisplayName("Should refuse invalid inventory data before clearing anything")
         void invalidInventoryData() {
             Player player = UltiBackupTestHelper.createMockPlayer("P", UUID.randomUUID());
             BackupContent content = BackupContent.builder()
                     .inventoryContents("not valid yaml: {{{")
                     .build();
 
-            // Should not throw - invalid YAML returns null from deserializeItems
-            assertThatCode(() -> content.restoreToPlayer(player, false, false, false))
-                    .doesNotThrowAnyException();
+            // Used to be swallowed: the inventory was cleared, nothing was restored, and the restore
+            // reported success (UltiBackup#21). Now it is refused before the inventory is touched.
+            assertThatThrownBy(() -> content.restoreToPlayer(player, false, false, false))
+                    .isInstanceOf(BackupContent.UnreadablePartException.class);
+            verify(player.getInventory(), never()).clear();
         }
 
         @Test
@@ -754,7 +771,7 @@ class BackupContentTest {
         }
 
         @Test
-        @DisplayName("Should handle invalid offhand data gracefully")
+        @DisplayName("Should refuse invalid armor and off-hand data before clearing anything")
         void invalidOffhandData() {
             Player player = UltiBackupTestHelper.createMockPlayer("P", UUID.randomUUID());
             BackupContent content = BackupContent.builder()
@@ -762,9 +779,11 @@ class BackupContentTest {
                     .offhandItem("not: valid item section")
                     .build();
 
-            // restoreArmor=true, armor will be deserialized but have no items section
-            assertThatCode(() -> content.restoreToPlayer(player, true, false, false))
-                    .doesNotThrowAnyException();
+            // restoreArmor=true: armor text with no items section cannot be read back, so the
+            // restore is refused before anything is cleared (UltiBackup#21).
+            assertThatThrownBy(() -> content.restoreToPlayer(player, true, false, false))
+                    .isInstanceOf(BackupContent.UnreadablePartException.class);
+            verify(player.getInventory(), never()).clear();
         }
     }
 
