@@ -249,6 +249,14 @@ public class BackupService {
                 .replace("{PLAYER}", player.getName()));
             
             return RestoreResult.SUCCESS;
+        } catch (BackupContent.UnreadablePartException e) {
+            // restoreToPlayer read every part before touching the player, so nothing was changed:
+            // report failure, never success (UltiKits/UltiBackup#21).
+            plugin.getLogger().warn(e, plugin.i18n("backup.log.restore_unreadable")
+                .replace("{ID}", String.valueOf(metadata.getId()))
+                .replace("{PLAYER}", player.getName())
+                .replace("{PART}", e.getPart()));
+            return RestoreResult.RESTORE_FAILED;
         } catch (Exception e) {
             plugin.getLogger().error(e, plugin.i18n("backup.log.restore_failed")
                 .replace("{ID}", String.valueOf(metadata.getId()))

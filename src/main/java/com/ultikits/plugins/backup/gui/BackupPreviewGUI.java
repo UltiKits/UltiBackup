@@ -61,6 +61,15 @@ public class BackupPreviewGUI implements InventoryHolder {
             return;
         }
 
+        // A part that cannot be read back shows as empty in the preview; say so in the console,
+        // through the language files (UltiKits/UltiBackup#21).
+        BackupContent.UnreadablePartException unreadable = content.findUnreadablePart();
+        if (unreadable != null) {
+            plugin.getLogger().warn(unreadable, plugin.i18n("backup.log.preview_unreadable")
+                .replace("{ID}", String.valueOf(metadata.getId()))
+                .replace("{PART}", unreadable.getPart()));
+        }
+
         BackupPreviewGUI gui = new BackupPreviewGUI(plugin, viewer, metadata, content);
         viewer.openInventory(gui.getInventory());
     }

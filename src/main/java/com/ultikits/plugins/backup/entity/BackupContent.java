@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
+import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -134,9 +135,13 @@ public class BackupContent {
 
         // Create YAML content
         YamlConfiguration yaml = new YamlConfiguration();
-        yaml.set("inventory", inventoryContents);
+        // Always written, even for an empty inventory: loadFromFile refuses a file without it.
+        yaml.set("inventory", inventoryContents == null ? "" : inventoryContents);
         yaml.set("armor", armorContents);
-        yaml.set("offhand", offhandItem);
+        // Armor and off-hand are written together or not at all (loadFromFile refuses one without the
+        // other): with an armor part, no off-hand text is an empty hand, written as blank text; without
+        // one, the off-hand is never restored, so it is not written.
+        yaml.set("offhand", armorContents == null ? null : (offhandItem == null ? "" : offhandItem));
         yaml.set("enderchest", enderchestContents);
         yaml.set("expLevel", expLevel);
         yaml.set("expProgress", expProgress);
@@ -166,12 +171,46 @@ public class BackupContent {
      * @throws IOException if load fails
      */
     public static BackupContent loadFromFile(File file) throws IOException {
-        YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
-        
+        // Not YamlConfiguration#loadConfiguration: for a body it cannot parse, that logs and returns
+        // an EMPTY configuration, every part then reads as blank, and a restore would clear the
+        // player's inventory and apply nothing (UltiKits/UltiBackup#21). A file this module wrote
+        // always carries the "inventory" key (saveToFile sets it even for an empty inventory) and
+        // ends with "expProgress" (the last key it writes, always set), so a file without either is
+        // not a whole backup: saveToFile writes in one pass, and a crash or a full disk leaves a prefix.
+        YamlConfiguration yaml = new YamlConfiguration();
+        try {
+            yaml.load(file);
+        } catch (InvalidConfigurationException e) {
+            throw new IOException("Backup file is not valid YAML: " + file.getName(), e);
+        }
+        if (!yaml.contains("inventory")) {
+            throw new IOException("Backup file has no inventory section: " + file.getName());
+        }
+        if (!yaml.contains("expProgress")) {
+            throw new IOException("Backup file is incomplete (no expProgress, its last key): " + file.getName());
+        }
+        // The typed getters below turn a missing or mistyped key into a default ("" or 0) that a
+        // restore would apply. saveToFile writes the four parts as text, armor and off-hand together
+        // or not at all, and both experience values as numbers, always: refuse any other shape here.
+        for (String part : new String[] {"inventory", "armor", "offhand", "enderchest"}) {
+            if (yaml.contains(part) && !yaml.isString(part)) {
+                throw new IOException("Backup file part is not text: " + part + " in " + file.getName());
+            }
+        }
+        if (yaml.contains("armor") != yaml.contains("offhand")) {
+            throw new IOException("Backup file has armor or off-hand without the other: " + file.getName());
+        }
+        if (!yaml.isInt("expLevel") || !(yaml.get("expProgress") instanceof Number)) {
+            throw new IOException("Backup file experience is missing or not a number: " + file.getName());
+        }
+
         return BackupContent.builder()
             .inventoryContents(yaml.getString("inventory", ""))
-            .armorContents(yaml.getString("armor", ""))
-            .offhandItem(yaml.getString("offhand", ""))
+            // No default: a missing armor or off-hand key means the backup was taken without armor
+            // (backup_armor: false writes neither key), which a restore must tell apart from armor that
+            // was empty when it was taken (written as '') (UltiKits/UltiBackup#25).
+            .armorContents(yaml.getString("armor"))
+            .offhandItem(yaml.getString("offhand"))
             .enderchestContents(yaml.getString("enderchest", ""))
             .expLevel(yaml.getInt("expLevel", 0))
             .expProgress((float) yaml.getDouble("expProgress", 0.0))
@@ -240,20 +279,61 @@ public class BackupContent {
     /**
      * Restore content to player.
      * <p>
-     * 将内容恢复到玩家。
+     * Every part the restore will apply is read back first. If any part whose stored text is not
+     * blank cannot be read back, or, when experience is restored, the level is negative or the
+     * progress is outside 0-1, this throws {@link UnreadablePartException} before anything is
+     * cleared or applied, so the player's inventory is left exactly as it was
+     * (UltiKits/UltiBackup#21). A blank part is a part that was genuinely empty when it was backed
+     * up, and is restored as empty, as before.
+     * <p>
+     * 将内容恢复到玩家。先读取将要恢复的每一部分；任一非空部分无法读取，或在恢复经验时等级为负、经验进度不在
+     * 0-1 之间时，在清空或写入任何东西之前抛出 {@link UnreadablePartException}，玩家背包保持原样。
      *
      * @param player the player
      * @param restoreArmor whether to restore armor
      * @param restoreEnderchest whether to restore ender chest
      * @param restoreExp whether to restore experience
+     * @throws UnreadablePartException if a part that is not blank cannot be read back, or, when
+     *                                 experience is restored, the level is negative or the
+     *                                 progress is outside 0-1; nothing has been changed on the
+     *                                 player
      */
     public void restoreToPlayer(Player player, boolean restoreArmor, 
             boolean restoreEnderchest, boolean restoreExp) {
-        // Clear current inventory
-        player.getInventory().clear();
+        // Read everything first. Nothing below this block may run unless every part read back.
+        ItemStack[] contents = readItems(inventoryContents, PART_INVENTORY);
+        ItemStack[] armor = null;
+        ItemStack offhand = null;
+        if (restoreArmor && armorContents != null) {
+            armor = readItems(armorContents, PART_ARMOR);
+            offhand = readItem(offhandItem, PART_OFFHAND);
+        }
+        ItemStack[] enderChest = null;
+        if (restoreEnderchest && enderchestContents != null) {
+            enderChest = readItems(enderchestContents, PART_ENDERCHEST);
+        }
+        // The server refuses a negative level and a progress outside 0-1 (NaN included), and those
+        // calls come last, after the inventories are replaced: check them here, before anything.
+        if (restoreExp) {
+            if (expLevel < 0) {
+                throw new UnreadablePartException(PART_EXP_LEVEL, null);
+            }
+            if (!(expProgress >= 0.0f && expProgress <= 1.0f)) {
+                throw new UnreadablePartException(PART_EXP_PROGRESS, null);
+            }
+        }
+
+        // Clear what the restore replaces. PlayerInventory#clear() empties armor and off-hand too, so
+        // unless this restore applies an armor part -- armor restored AND the backup has one -- only the
+        // storage slots are cleared: otherwise the armor and off-hand the player is wearing would be
+        // destroyed and nothing put back (UltiKits/UltiBackup#25).
+        if (restoreArmor && armorContents != null) {
+            player.getInventory().clear();
+        } else {
+            player.getInventory().setStorageContents(new ItemStack[player.getInventory().getStorageContents().length]);
+        }
         
         // Restore inventory contents
-        ItemStack[] contents = deserializeItems(inventoryContents);
         if (contents != null) {
             for (int i = 0; i < Math.min(contents.length, 36); i++) {
                 if (contents[i] != null) {
@@ -263,23 +343,16 @@ public class BackupContent {
         }
         
         // Restore armor
-        if (restoreArmor && armorContents != null) {
-            ItemStack[] armor = deserializeItems(armorContents);
-            if (armor != null) {
-                player.getInventory().setArmorContents(armor);
-            }
-            ItemStack offhand = deserializeItem(offhandItem);
-            if (offhand != null) {
-                player.getInventory().setItemInOffHand(offhand);
-            }
+        if (armor != null) {
+            player.getInventory().setArmorContents(armor);
+        }
+        if (offhand != null) {
+            player.getInventory().setItemInOffHand(offhand);
         }
         
         // Restore ender chest
-        if (restoreEnderchest && enderchestContents != null) {
-            ItemStack[] enderChest = deserializeItems(enderchestContents);
-            if (enderChest != null) {
-                player.getEnderChest().setContents(enderChest);
-            }
+        if (enderChest != null) {
+            player.getEnderChest().setContents(enderChest);
         }
         
         // Restore exp
@@ -290,6 +363,26 @@ public class BackupContent {
     }
     
     /**
+     * The first part, in the order inventory, armor, off-hand, ender chest, whose stored text is
+     * not blank but cannot be read back, or {@code null} when every part reads back.
+     * <p>
+     * 第一个非空但无法读取的部分；全部可读时返回 {@code null}。
+     *
+     * @return the failure for the first unreadable part, or {@code null}
+     */
+    public UnreadablePartException findUnreadablePart() {
+        try {
+            readItems(inventoryContents, PART_INVENTORY);
+            readItems(armorContents, PART_ARMOR);
+            readItem(offhandItem, PART_OFFHAND);
+            readItems(enderchestContents, PART_ENDERCHEST);
+            return null;
+        } catch (UnreadablePartException e) {
+            return e;
+        }
+    }
+
+    /**
      * Get deserialized inventory items.
      * <p>
      * 获取反序列化的背包物品。
@@ -297,7 +390,7 @@ public class BackupContent {
      * @return the inventory items
      */
     public ItemStack[] getInventoryItems() {
-        return deserializeItems(inventoryContents);
+        return deserializeItems(inventoryContents, PART_INVENTORY);
     }
     
     /**
@@ -308,7 +401,7 @@ public class BackupContent {
      * @return the armor items
      */
     public ItemStack[] getArmorItems() {
-        return deserializeItems(armorContents);
+        return deserializeItems(armorContents, PART_ARMOR);
     }
     
     /**
@@ -330,7 +423,7 @@ public class BackupContent {
      * @return the ender chest items
      */
     public ItemStack[] getEnderchestItems() {
-        return deserializeItems(enderchestContents);
+        return deserializeItems(enderchestContents, PART_ENDERCHEST);
     }
     
     // ============ Serialization Utilities ============
@@ -362,44 +455,36 @@ public class BackupContent {
     }
     
     /**
-     * Deserialize items from YAML string.
+     * Deserialize items from YAML string; {@code null} when blank or unreadable.
      */
-    private static ItemStack[] deserializeItems(String data) {
-        if (data == null || data.isEmpty()) {
-            return null;
-        }
-        
+    private static ItemStack[] deserializeItems(String data, String part) {
         try {
-            YamlConfiguration yaml = new YamlConfiguration();
-            yaml.loadFromString(data);
-            
-            if (!yaml.isConfigurationSection("items")) {
-                return null;
-            }
-            
-            int maxSlot = 0;
-            for (String key : yaml.getConfigurationSection("items").getKeys(false)) {
-                int slot = Integer.parseInt(key);
-                maxSlot = Math.max(maxSlot, slot);
-            }
-            
-            ItemStack[] result = new ItemStack[maxSlot + 1];
-            for (String key : yaml.getConfigurationSection("items").getKeys(false)) {
-                int slot = Integer.parseInt(key);
-                result[slot] = yaml.getItemStack("items." + key);
-            }
-            return result;
-        } catch (Exception e) {
-            java.util.logging.Logger.getLogger(BackupContent.class.getName())
-                    .log(java.util.logging.Level.WARNING, "Failed to deserialize items", e);
+            return readItems(data, part);
+        } catch (UnreadablePartException e) {
             return null;
         }
     }
 
     /**
-     * Deserialize single item from YAML string.
+     * Deserialize single item from YAML string; {@code null} when blank or unreadable.
      */
     private static ItemStack deserializeItem(String data) {
+        try {
+            return readItem(data, PART_OFFHAND);
+        } catch (UnreadablePartException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Read items back from their stored text.
+     *
+     * @return {@code null} for blank text (a part that was empty when it was backed up)
+     * @throws UnreadablePartException if the text is not blank and does not read back as the
+     *                                 items section {@link #serializeItems} writes
+     */
+    private static ItemStack[] readItems(String data, String part) {
+        int capacity = capacityOf(part);
         if (data == null || data.isEmpty()) {
             return null;
         }
@@ -407,11 +492,126 @@ public class BackupContent {
         try {
             YamlConfiguration yaml = new YamlConfiguration();
             yaml.loadFromString(data);
-            return yaml.getItemStack("item");
+
+            // serializeItems writes an empty part as blank text, so an items section with no entries is
+            // damaged data, not an empty part.
+            if (!yaml.isConfigurationSection("items")
+                    || yaml.getConfigurationSection("items").getKeys(false).isEmpty()) {
+                throw new UnreadablePartException(part, null);
+            }
+
+            int maxSlot = 0;
+            for (String key : yaml.getConfigurationSection("items").getKeys(false)) {
+                int slot = Integer.parseInt(key);
+                // A slot outside the inventory the part is applied to cannot have been written by
+                // fromPlayer, and applying it would throw after the inventory was already cleared.
+                if (slot < 0 || slot >= capacity) {
+                    throw new UnreadablePartException(part, null);
+                }
+                maxSlot = Math.max(maxSlot, slot);
+            }
+
+            ItemStack[] result = new ItemStack[maxSlot + 1];
+            for (String key : yaml.getConfigurationSection("items").getKeys(false)) {
+                int slot = Integer.parseInt(key);
+                ItemStack item = yaml.getItemStack("items." + key);
+                // serializeItems writes only non-empty slots, so an entry that reads back as
+                // nothing, or as air, is an item this server could not rebuild.
+                if (item == null || item.getType().isAir()) {
+                    throw new UnreadablePartException(part, null);
+                }
+                result[slot] = item;
+            }
+            return result;
+        } catch (UnreadablePartException e) {
+            throw e;
         } catch (Exception e) {
-            java.util.logging.Logger.getLogger(BackupContent.class.getName())
-                    .log(java.util.logging.Level.WARNING, "Failed to deserialize item", e);
+            throw new UnreadablePartException(part, e);
+        }
+    }
+
+    /**
+     * Read one item back from its stored text.
+     *
+     * @return {@code null} for blank text (no item was held when it was backed up)
+     * @throws UnreadablePartException if the text is not blank and does not read back as an item
+     */
+    private static ItemStack readItem(String data, String part) {
+        if (data == null || data.isEmpty()) {
             return null;
+        }
+
+        try {
+            YamlConfiguration yaml = new YamlConfiguration();
+            yaml.loadFromString(data);
+            ItemStack item = yaml.getItemStack("item");
+            // serializeItem writes nothing for an empty hand, so air here is an unreadable item.
+            if (item == null || item.getType().isAir()) {
+                throw new UnreadablePartException(part, null);
+            }
+            return item;
+        } catch (UnreadablePartException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new UnreadablePartException(part, e);
+        }
+    }
+
+    /**
+     * How many slots the inventory a part is applied to has: 36 storage slots, 4 armor slots, 27
+     * ender chest slots (the sizes {@link #fromPlayer} reads them from).
+     */
+    private static int capacityOf(String part) {
+        if (PART_ARMOR.equals(part)) {
+            return 4;
+        }
+        if (PART_ENDERCHEST.equals(part)) {
+            return 27;
+        }
+        return 36;
+    }
+
+    /** Stored key of the inventory part, as written in the backup file. */
+    public static final String PART_INVENTORY = "inventory";
+    /** Stored key of the armor part, as written in the backup file. */
+    public static final String PART_ARMOR = "armor";
+    /** Stored key of the off-hand part, as written in the backup file. */
+    public static final String PART_OFFHAND = "offhand";
+    /** Stored key of the ender chest part, as written in the backup file. */
+    public static final String PART_ENDERCHEST = "enderchest";
+    /** Stored key of the experience level, checked only when a restore applies experience. */
+    public static final String PART_EXP_LEVEL = "expLevel";
+    /** Stored key of the experience progress, checked only when a restore applies experience. */
+    public static final String PART_EXP_PROGRESS = "expProgress";
+
+    /**
+     * A part of a backup whose stored text is not blank but cannot be read back into items, or,
+     * when a restore applies experience, an experience value the server would refuse.
+     * <p>
+     * 备份中非空但无法读取为物品的部分；或在恢复经验时，服务器会拒绝的经验值。
+     */
+    public static class UnreadablePartException extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+
+        private final String part;
+
+        /**
+         * @param part  the part's stored key ({@link #PART_INVENTORY}, {@link #PART_ARMOR},
+         *              {@link #PART_OFFHAND}, {@link #PART_ENDERCHEST}, {@link #PART_EXP_LEVEL} or
+         *              {@link #PART_EXP_PROGRESS})
+         * @param cause what the reader threw, or {@code null} when the text parsed but held no item
+         */
+        public UnreadablePartException(String part, Throwable cause) {
+            super("Backup part cannot be read: " + part, cause);
+            this.part = part;
+        }
+
+        /**
+         * @return the part's stored key, as written in the backup file
+         */
+        public String getPart() {
+            return part;
         }
     }
 }
