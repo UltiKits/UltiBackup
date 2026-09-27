@@ -17,15 +17,15 @@ for real-machine verification, not user-facing documentation.
 > dispatch with another module's would let a restore silently invalidate a fixture another
 > module's row is mid-way through relying on.
 
-> **Correction to this module's plan-stage description:** the plan that produced this checklist
-> described UltiBackup's restore path as overwriting "world data". Reading the source
+> **Correction to an earlier description of this module:** it described UltiBackup's restore
+> path as overwriting "world data". Reading the source
 > (`BackupContent#restoreToPlayer`, `BackupService#restoreBackup`/`#forceRestore`) shows the
 > actual destructive target is narrower and different in kind: a restore replaces the TARGET
 > PLAYER'S OWN inventory/armor/off-hand/ender-chest/experience — it never touches world terrain,
 > blocks, or any other player's state. Every Preconditions cell below is scoped to that real
 > hazard (a disposable test player's own current items) rather than to world data, which this
 > module's restore path cannot reach at all. As a defense-in-depth discipline anyway (this
-> module cannot reach world terrain, but the same scratch/throwaway-fixture rule the plan applies
+> module cannot reach world terrain, but the same scratch/throwaway-fixture rule that applies
 > to genuinely world-destructive modules is followed here too): every fixture below (`Tester1`,
 > `Tester2`, `Tester3`) must be a throwaway, scratch, disposable test-only player identity, and every backup
 > exercised by a restore or force-restore row must itself be a scratch backup created by an
@@ -37,24 +37,24 @@ for real-machine verification, not user-facing documentation.
 - **Columns:** `ID`, `Preconditions`, `Steps`, `Expected`, `Layer`, `Covers`.
 - **ID:** cites its `FEATURES.md` ID verbatim. A negative case suffixes the checklist ID only,
   as `.neg-<slug>` — a negative case still tests the same feature, so the base ID is unchanged.
-- **Layer**, copied verbatim from Laojun's own `ultitools-real-client-uat` skill so no
+- **Layer**, copied verbatim from the real-client acceptance tooling's fixed vocabulary so no
   translation step exists at dispatch time: `protocol`, `java-client`, `os-input`, `pixel`,
   `server`, `human`.
-- **Human-authenticated-session rows (D-27b):** a row whose Steps can only be exercised through
+- **Human-authenticated-session rows:** a row whose Steps can only be exercised through
   the maintainer's own authenticated UltiCloud panel session carries the fixed Preconditions
   phrase `maintainer-authenticated UltiCloud panel session (personal credentials)` and Layer
   `human`. This module has no panel-facing surface at all (no capability, no remote route), so no
   row below is affected; the convention is stated here for template consistency.
 - **Expected** must name an observable truth — an exact chat line, a log line, a database row,
   an inventory slot — and never the words "it works".
-- **Covers** back-references a Phase 9 GUI-excluded class name; left blank when no such class
+- **Covers** back-references a GUI class excluded from the JaCoCo coverage gate; left blank when no such class
   applies. This module owns all three of its GUI-excluded classes (`BackupGUI`,
   `BackupPreviewGUI`, `ForceRestoreConfirmPage`) — each is named in exactly one row's Covers cell
   below.
 - A row whose Preconditions name a prior row must appear after that row in file order — asserted
   mechanically: for every row, every checklist ID cited in its Preconditions cell must have a
-  strictly smaller line number in this file than the row citing it (sweep class 8, D-27a).
-- **Config-per-file rule (D-06):** one checklist row per `@ConfigEntity`-annotated class or per
+  strictly smaller line number in this file than the row citing it.
+- **Config-per-file rule:** one checklist row per `@ConfigEntity`-annotated class or per
   shipped yml file, never one row per key. This module has exactly one such file
   (`plugins/UltiTools/pluginConfig/UltiBackup/config/backup.yml`, generated from `BackupConfig`'s `@ConfigEntry` defaults — no packaged
   seed resource exists to extract), so exactly one config-per-file row appears below
@@ -72,9 +72,9 @@ for real-machine verification, not user-facing documentation.
 
 | ID | Preconditions | Steps | Expected | Layer | Covers |
 |---|---|---|---|---|---|
-| ultibackup.backup.create | `language: en`; a disposable test player (`Tester1`) holding both `ultibackup.use` and `ultibackup.create`, online | Run `/backup create` | Chat shows `✔ Backup created successfully!` (green); a new row for this player now exists in the database's `backup_metadata` table with `backup_reason = MANUAL`, and a new YAML file exists under `plugins/UltiTools/backups/` whose header block (the file's first six lines, before the YAML body) contains a `# Checksum:` line — `BackupContent#FILE_HEADER` places four warning lines and a separator before it, so the checksum line is the SIXTH line of the file, not the first | server | |
+| ultibackup.backup.create | `language: en`; a disposable test player (`Tester1`) holding both `ultibackup.use` and `ultibackup.create`, online | Run `/backup create` | Chat shows `✔ Backup created successfully!` (green); a new row for this player now exists in the database's `backup_metadata` table with `backup_reason = MANUAL`, and a new YAML file exists under `plugins/UltiTools/backups/` whose header block (the file's first six lines, before the YAML body) contains a `# Checksum:` line — `BackupContent#FILE_HEADER` places four warning lines and a separator before it, so the checksum line is the SIXTH line of the file, not the first; the server console (`logs/latest.log`) shows `Created backup for Tester1: backups/<Tester1's UUID>_<timestamp>.yml`, naming that same file — a line reading `backup.log.created` instead is a `fail` | server | |
 | ultibackup.backup.create.neg-no-permission | `language: en`; `Tester1` holds `ultibackup.use` but NOT `ultibackup.create` | Run `/backup create` | Chat shows `You don't have permission to do this!` (red); no new `backup_metadata` row and no new backup file are created | server | |
-| ultibackup.backup.list | `language: en`; `Tester1` has exactly one backup (from `ultibackup.backup.create`) | Run `/backup list` | Chat shows `=== Your Backups ===` (gold) followed by exactly one line reading `1. <TIME> MANUAL` in the `{NUMBER}. {TIME} {REASON}` shape — `{REASON}` renders the RAW constant `MANUAL` verbatim, not a translated label, because `BackupMetadata#getReasonDisplay()` never applies the six `backup.reason.*` language keys (known product defect, `UltiKits/UltiBackup#15`); this row's Expected states the actual (untranslated) output, not the label the lang keys were written to provide | server | |
+| ultibackup.backup.list | `language: en`; `Tester1` has exactly one backup (from `ultibackup.backup.create`) | Run `/backup list` | Chat shows `=== Your Backups ===` (gold) followed by exactly one line reading `1. <TIME> Manual Backup` in the `{NUMBER}. {TIME} {REASON}` shape — `{REASON}` renders `backup.reason.manual`'s English label `Manual Backup` (aqua), not the stored constant `MANUAL`; a line ending in `MANUAL` is a `fail` (`UltiKits/UltiBackup#15`) | server | |
 | ultibackup.backup.list.neg-empty | `language: en`; a disposable test player (`Tester2`) with zero backups (never ran `/backup create`, and has no auto-backup trigger fired for them) | Run `/backup list` | Chat shows exactly `You have no backups.` (yellow) — no header line, no item lines; this is the ONLY correct empty-state text (a bare header with zero item lines would be a vacuous pass) | server | |
 | ultibackup.backup.restore | `language: en`; `Tester1` has a backup with an intact, unmodified checksum (from `ultibackup.backup.create`, run immediately beforehand so no other row has corrupted it); `Tester1`'s CURRENT inventory (before running this row) is populated with disposable, worthless items whose loss does not matter — this row REPLACES that inventory entirely with the backup's stored contents | Note `Tester1`'s current inventory contents, then run `/backup restore 1` | Chat shows `✔ Backup restored successfully!` (green); `Tester1`'s inventory now matches exactly what was captured at backup time (from `ultibackup.backup.create`), not the disposable items noted before this step — the disposable items are gone, proving a genuine overwrite occurred, not a no-op | server | |
 | ultibackup.backup.restore.neg-invalid-number | `language: en`; `Tester1` has exactly one backup (backup list position 1 exists, position 2 does not) | Run `/backup restore 2` | Chat shows `Invalid backup number!` (red); `Tester1`'s inventory is unchanged | server | |
@@ -117,11 +117,11 @@ module's config files into the running beans, then logs the framework's own line
 sender. Both lines are framework strings localised by the framework's `language` setting, hence
 the row's `language: en` precondition. `/ul` requires op, so the row runs it from the server
 console. `ultibackup.lifecycle.reload` supersedes `ultibackup.event.module-reload` (retired with
-`UltiKits/UltiBackup#14`; its Phase 10 verdict recorded the defect, not this behaviour).
+`UltiKits/UltiBackup#14`; its earlier checklist verdict recorded the defect, not this behaviour).
 
 | ID | Preconditions | Steps | Expected | Layer | Covers |
 |---|---|---|---|---|---|
-| ultibackup.lifecycle.reload | `language: en`; `UltiBackup` loaded; `max_backups_per_player: 10` (the shipped default) in `plugins/UltiTools/pluginConfig/UltiBackup/config/backup.yml`; `datasource.type: sqlite` in `plugins/UltiTools/config.yml` (shipped default) and the `sqlite3` CLI available on the server host (step 4's cleanup); a disposable test player (`Tester3`), online, who is NOT an operator (this module declares no `ultibackup.*` permission in `plugin.yml`, so Bukkit grants every such node to operators by default) and is explicitly granted `ultibackup.use` and `ultibackup.create` but NOT `ultibackup.auto` (so no death, quit or scheduled backup adds a row during this test), with zero backups (`/backup list` shows `You have no backups.`; if it does not, run step 4's cleanup first) | 1. As `Tester3`, run `/backup create` three times, waiting at least 30 seconds between runs (`@CmdCD(30)`); after each run, wait for its reply `✔ Backup created successfully!` before sending any further command (the create runs asynchronously and replies only after it has saved and pruned). Only after the third reply, run `/backup list`. 2. Edit `max_backups_per_player` to `2` in that `backup.yml` and save the file; from the server console, on the SAME running server (no restart), run `ul reload UltiBackup`. 3. At least 30 seconds after step 1's last create, as `Tester3`, run `/backup create` once more and wait for its reply `✔ Backup created successfully!`; only after that reply, run `/backup list`. 4. Cleanup: set `max_backups_per_player` back to `10`, save, and run `ul reload UltiBackup` from the console; then run `sqlite3 plugins/UltiTools/sqliteDB/UltiBackup.db "DELETE FROM backup_metadata WHERE player_uuid='<Tester3's UUID>'"`, delete every `plugins/UltiTools/backups/<Tester3's UUID>_*.yml` file, and as `Tester3` run `/backup list`. | Step 1: each create replies `✔ Backup created successfully!` (green); `/backup list` shows `=== Your Backups ===` followed by exactly three `<N>. <TIME> MANUAL` lines — this proves the limit in force before the edit is at least 3, so step 3 can discriminate; if fewer than three lines appear, record the row `blocked`, never `pass`. Step 2: the console shows `Module 'UltiBackup' reloaded.` and the reply `Module UltiBackup has been reloaded`, and no `UltiBackup configuration reloaded!` line. Step 3: the create replies `✔ Backup created successfully!`, and `/backup list` shows exactly two lines — the backup just created as `1.` and step 1's newest as `2.`; `plugins/UltiTools/backups/` holds exactly two files named `<Tester3's UUID>_*.yml`, step 1's two oldest having been pruned. The edited `max_backups_per_player` took effect without a restart. Step 4: `/backup list` shows `You have no backups.`, so the row can be re-run. On the 6.2.x framework, where the pre-migration module still loads, the configuration was never re-read on `/ul reload`, so step 3 would list four backups instead | server | |
+| ultibackup.lifecycle.reload | `language: en`; `UltiBackup` loaded; `max_backups_per_player: 10` (the shipped default) in `plugins/UltiTools/pluginConfig/UltiBackup/config/backup.yml`; `datasource.type: sqlite` in `plugins/UltiTools/config.yml` (shipped default) and the `sqlite3` CLI available on the server host (step 4's cleanup); a disposable test player (`Tester3`), online, who is NOT an operator (this module declares no `ultibackup.*` permission in `plugin.yml`, so Bukkit grants every such node to operators by default) and is explicitly granted `ultibackup.use` and `ultibackup.create` but NOT `ultibackup.auto` (so no death, quit or scheduled backup adds a row during this test), with zero backups (`/backup list` shows `You have no backups.`; if it does not, run step 4's cleanup first) | 1. As `Tester3`, run `/backup create` three times, waiting at least 30 seconds between runs (`@CmdCD(30)`); after each run, wait for its reply `✔ Backup created successfully!` before sending any further command (the create runs asynchronously and replies only after it has saved and pruned). Only after the third reply, run `/backup list`. 2. Edit `max_backups_per_player` to `2` in that `backup.yml` and save the file; from the server console, on the SAME running server (no restart), run `ul reload UltiBackup`. 3. At least 30 seconds after step 1's last create, as `Tester3`, run `/backup create` once more and wait for its reply `✔ Backup created successfully!`; only after that reply, run `/backup list`. 4. Cleanup: set `max_backups_per_player` back to `10`, save, and run `ul reload UltiBackup` from the console; then run `sqlite3 plugins/UltiTools/sqliteDB/UltiBackup.db "DELETE FROM backup_metadata WHERE player_uuid='<Tester3's UUID>'"`, delete every `plugins/UltiTools/backups/<Tester3's UUID>_*.yml` file, and as `Tester3` run `/backup list`. | Step 1: each create replies `✔ Backup created successfully!` (green); `/backup list` shows `=== Your Backups ===` followed by exactly three `<N>. <TIME> Manual Backup` lines — this proves the limit in force before the edit is at least 3, so step 3 can discriminate; if fewer than three lines appear, record the row `blocked`, never `pass`. Step 2: the console shows `Module 'UltiBackup' reloaded.` and the reply `Module UltiBackup has been reloaded`, and no `UltiBackup configuration reloaded!` line. Step 3: the create replies `✔ Backup created successfully!`, and `/backup list` shows exactly two lines — the backup just created as `1.` and step 1's newest as `2.`; `plugins/UltiTools/backups/` holds exactly two files named `<Tester3's UUID>_*.yml`, step 1's two oldest having been pruned. The edited `max_backups_per_player` took effect without a restart. Step 4: `/backup list` shows `You have no backups.`, so the row can be re-run. On the 6.2.x framework, where the pre-migration module still loads, the configuration was never re-read on `/ul reload`, so step 3 would list four backups instead | server | |
 
 ## Scheduled Tasks
 
@@ -139,7 +139,7 @@ console. `ultibackup.lifecycle.reload` supersedes `ultibackup.event.module-reloa
 
 ## Configuration
 
-One row per shipped yml file (D-06's config-per-file rule): `plugins/UltiTools/pluginConfig/UltiBackup/config/backup.yml` (8 keys, no
+One row per shipped yml file (the config-per-file rule): `plugins/UltiTools/pluginConfig/UltiBackup/config/backup.yml` (8 keys, no
 packaged seed resource — generated from `BackupConfig`'s `@ConfigEntry` defaults on first boot).
 This row confirms every key is present at its `FEATURES.md`-documented default, then flips one or
 more representative keys and observes the behaviour follow — **except

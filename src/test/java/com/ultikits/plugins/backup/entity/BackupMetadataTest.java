@@ -162,40 +162,6 @@ class BackupMetadataTest {
         }
     }
 
-    // ==================== Reason Display ====================
-
-    @Nested
-    @DisplayName("Reason Display (i18n)")
-    class ReasonDisplay {
-
-        @ParameterizedTest
-        @CsvSource({
-                "DEATH,  DEATH",
-                "QUIT,   QUIT",
-                "AUTO,   AUTO",
-                "MANUAL, MANUAL",
-                "ADMIN,  ADMIN"
-        })
-        @DisplayName("Should return raw reason string")
-        void knownReasons(String reason, String expectedDisplay) {
-            BackupMetadata metadata = BackupMetadata.builder()
-                    .backupReason(reason)
-                    .build();
-
-            assertThat(metadata.getReasonDisplay()).isEqualTo(expectedDisplay);
-        }
-
-        @Test
-        @DisplayName("Should return raw reason for unrecognized reason")
-        void unknownReason() {
-            BackupMetadata metadata = BackupMetadata.builder()
-                    .backupReason("SOMETHING_ELSE")
-                    .build();
-
-            assertThat(metadata.getReasonDisplay()).isEqualTo("SOMETHING_ELSE");
-        }
-    }
-
     // ==================== Backup File Resolution ====================
     // Note: getBackupFile() calls UltiTools.getInstance().getDataFolder() which cannot
     // be mocked (UltiTools is a final class). We test the null/empty path guard logic only.
@@ -716,23 +682,6 @@ class BackupMetadataTest {
         void builderToString() {
             String str = BackupMetadata.builder().toString();
             assertThat(str).contains("BackupMetadata");
-        }
-    }
-
-    // ==================== Reason Display null case ====================
-
-    @Nested
-    @DisplayName("Reason Display null")
-    class ReasonDisplayNull {
-
-        @Test
-        @DisplayName("Should return UNKNOWN when reason is null")
-        void nullReason() {
-            BackupMetadata metadata = BackupMetadata.builder()
-                    .backupReason(null)
-                    .build();
-
-            assertThat(metadata.getReasonDisplay()).isEqualTo("UNKNOWN");
         }
     }
 

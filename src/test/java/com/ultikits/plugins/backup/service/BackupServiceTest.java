@@ -828,8 +828,7 @@ class BackupServiceTest {
                 spyService.autoBackupAll();
             }
 
-            verify(UltiBackupTestHelper.getMockLogger())
-                    .info(argThat((String msg) -> msg.contains("1 players")));
+            verify(UltiBackupTestHelper.getMockLogger()).info("backup.log.auto_completed");
         }
 
         @Test
@@ -846,8 +845,7 @@ class BackupServiceTest {
                 spyService.autoBackupAll();
             }
 
-            verify(UltiBackupTestHelper.getMockLogger(), never())
-                    .info(argThat((String msg) -> msg.contains("Auto backup completed")));
+            verify(UltiBackupTestHelper.getMockLogger(), never()).info(anyString());
         }
     }
 

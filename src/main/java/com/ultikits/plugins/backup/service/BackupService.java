@@ -95,13 +95,14 @@ public class BackupService {
             // Clean up old backups
             cleanupOldBackups(UUID.fromString(player.getUniqueId().toString()));
             
-            plugin.getLogger().info("Created backup for " + player.getName() + 
-                ": " + metadata.getFilePath());
+            plugin.getLogger().info(plugin.i18n("backup.log.created")
+                .replace("{PLAYER}", player.getName())
+                .replace("{FILE}", metadata.getFilePath()));
             
             return metadata;
         } catch (IOException e) {
-            plugin.getLogger().error(e, 
-                "Failed to create backup for " + player.getName());
+            plugin.getLogger().error(e, plugin.i18n("backup.log.create_failed")
+                .replace("{PLAYER}", player.getName()));
             return null;
         }
     }
@@ -158,8 +159,8 @@ public class BackupService {
         try {
             return BackupContent.verifyChecksum(backupFile, metadata.getChecksum());
         } catch (IOException e) {
-            plugin.getLogger().warn(e, 
-                "Failed to verify checksum for backup: " + metadata.getId());
+            plugin.getLogger().warn(e, plugin.i18n("backup.log.verify_failed")
+                .replace("{ID}", String.valueOf(metadata.getId())));
             return false;
         }
     }
@@ -185,8 +186,8 @@ public class BackupService {
         try {
             return BackupContent.loadFromFile(backupFile);
         } catch (IOException e) {
-            plugin.getLogger().warn(e, 
-                "Failed to load backup content: " + metadata.getId());
+            plugin.getLogger().warn(e, plugin.i18n("backup.log.load_failed")
+                .replace("{ID}", String.valueOf(metadata.getId())));
             return null;
         }
     }
@@ -243,13 +244,15 @@ public class BackupService {
                 config.isBackupExp()
             );
             
-            plugin.getLogger().info("Restored backup " + metadata.getId() + 
-                " to player " + player.getName());
+            plugin.getLogger().info(plugin.i18n("backup.log.restored")
+                .replace("{ID}", String.valueOf(metadata.getId()))
+                .replace("{PLAYER}", player.getName()));
             
             return RestoreResult.SUCCESS;
         } catch (Exception e) {
-            plugin.getLogger().error(e, 
-                "Failed to restore backup " + metadata.getId() + " to " + player.getName());
+            plugin.getLogger().error(e, plugin.i18n("backup.log.restore_failed")
+                .replace("{ID}", String.valueOf(metadata.getId()))
+                .replace("{PLAYER}", player.getName()));
             return RestoreResult.RESTORE_FAILED;
         }
     }
@@ -333,7 +336,8 @@ public class BackupService {
             }
         }
         if (count > 0) {
-            plugin.getLogger().info("Auto backup completed: " + count + " players");
+            plugin.getLogger().info(plugin.i18n("backup.log.auto_completed")
+                .replace("{COUNT}", String.valueOf(count)));
         }
     }
     

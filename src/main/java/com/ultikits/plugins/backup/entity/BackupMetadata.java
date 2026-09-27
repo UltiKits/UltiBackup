@@ -1,5 +1,6 @@
 package com.ultikits.plugins.backup.entity;
 
+import com.ultikits.ultitools.abstracts.UltiToolsPlugin;
 import com.ultikits.ultitools.abstracts.data.BaseDataEntity;
 import com.ultikits.ultitools.annotations.Column;
 import com.ultikits.ultitools.annotations.Table;
@@ -14,6 +15,7 @@ import lombok.Builder;
 import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Locale;
 
 /**
  * Backup metadata entity (hot data).
@@ -119,15 +121,42 @@ public class BackupMetadata extends BaseDataEntity<String> {
     }
     
     /**
-     * Get backup reason display text.
-     * Returns the raw reason string (DEATH, QUIT, AUTO, MANUAL, ADMIN).
+     * Get the language key that labels this backup's reason.
+     * The five stored reasons (MANUAL, AUTO, DEATH, QUIT, ADMIN) map to {@code backup.reason.<reason>};
+     * a missing or unrecognised reason maps to {@code backup.reason.unknown}.
      * <p>
-     * 获取备份原因显示文本。
+     * 获取标注此备份原因的语言键。五种已存储的原因映射到 {@code backup.reason.<原因>}；
+     * 缺失或无法识别的原因映射到 {@code backup.reason.unknown}。
      *
+     * @return the language key
+     */
+    public String getReasonKey() {
+        if (backupReason != null) {
+            String reason = backupReason.toLowerCase(Locale.ROOT);
+            switch (reason) {
+                case "manual":
+                case "auto":
+                case "death":
+                case "quit":
+                case "admin":
+                    return "backup.reason." + reason;
+                default:
+                    break;
+            }
+        }
+        return "backup.reason.unknown";
+    }
+
+    /**
+     * Get backup reason display text in the server's language.
+     * <p>
+     * 以服务器语言获取备份原因显示文本。
+     *
+     * @param plugin the module whose language catalogue labels the reason
      * @return reason display text
      */
-    public String getReasonDisplay() {
-        return backupReason != null ? backupReason : "UNKNOWN";
+    public String getReasonDisplay(UltiToolsPlugin plugin) {
+        return plugin.i18n(getReasonKey());
     }
     
     /**

@@ -86,3 +86,14 @@ backup.help.restore_force: "§e/backup restore <number> force §f- Force restore
 backup.help.saveall: "§e/backup saveall §f- Save all online players (Admin)"
 backup.help.admin: "§e/backup admin <player> §f- View player's backups (Admin)"
 backup.help.admin_create: "§e/backup admin create <player> §f- Create backup for player (Admin)"
+
+# Console log lines
+backup.log.enabled: "UltiBackup has been enabled!"
+backup.log.created: "Created backup for {PLAYER}: {FILE}"
+backup.log.create_failed: "Failed to create backup for {PLAYER}"
+backup.log.verify_failed: "Failed to verify checksum for backup: {ID}"
+backup.log.load_failed: "Failed to load backup content: {ID}"
+backup.log.restored: "Restored backup {ID} to player {PLAYER}"
+backup.log.restore_failed: "Failed to restore backup {ID} to {PLAYER}"
+backup.log.auto_completed: "Auto backup completed: {COUNT} players"
+backup.log.force_restored: "Player {ADMIN} force-restored corrupted backup {ID} to {PLAYER}"

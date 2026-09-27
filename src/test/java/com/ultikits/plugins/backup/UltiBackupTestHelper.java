@@ -27,8 +27,8 @@ import static org.mockito.Mockito.*;
  * UltiToolsPlugin instances for injection into services and commands.
  * <p>
  * This class is also the module's single centralized test-time live-server bootstrap
- * (Phase 14's reopen guard target): {@link #setUp()} installs a live {@code MockBukkit}
- * server before any mock wiring happens, and {@link #tearDown()} tears it back down.
+ * (the reopen guard's target): {@link #setUp()} installs a live {@code MockBukkit} server
+ * before any mock wiring happens, and {@link #tearDown()} tears it back down.
  * Every test class in this module that needs a live Bukkit server -- including
  * {@link UltiBackupRegistrySentinelTest} -- routes through these two methods rather than
  * calling {@link MockBukkit#mock()}/{@link MockBukkit#unmock()} itself, so that removing or

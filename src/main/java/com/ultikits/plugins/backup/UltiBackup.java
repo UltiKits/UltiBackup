@@ -20,7 +20,7 @@ public class UltiBackup extends UltiToolsPlugin {
 
     @Override
     public boolean registerSelf() {
-        getLogger().info("UltiBackup has been enabled!");
+        getLogger().info(i18n("backup.log.enabled"));
         return true;
     }
 
