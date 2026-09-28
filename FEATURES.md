@@ -83,10 +83,10 @@ rather than an error:
    `.worktrees/economy-v2/src/main/java`, reporting double the real `@CmdMapping` count without
    the `-not -path` exclusions above. This module carries no worktree directory.
 3. **Javadoc and string literals** — requiring the annotation to start its own line (the
-   `^[[:space:]]*@` anchor) is what defeats a javadoc mention such as this module's own class
-   comment on `BackupCommand` ("Uses BaseCommandExecutor with @CmdCD, @RunAsync annotations") —
-   an unanchored grep for `@RunAsync` would count that prose line as a fourth hit against the
-   three real annotation sites below.
+   `^[[:space:]]*@` anchor) is what defeats a comment mention such as this module's own
+   `// Not @RunAsync: …` lines in `BackupCommand` — an unanchored grep for `@RunAsync` would count
+   those three comment lines, while the real annotation count is 0 (the three annotations were
+   removed by `UltiKits/UltiBackup#13`).
 
 **GUI page classes are not found by grepping for an annotation at all** — none of this
 repository's three GUI classes carries a page-marking annotation; they are identified
@@ -136,15 +136,15 @@ line states the true handler-method count (4) against the row count actually att
 
 | ID | Feature | Kind | How to reach | Permission | Target | Tier | Manual | Source |
 |---|---|---|---|---|---|---|---|---|
-| ultibackup.backup.admin-create | Create a manual backup for another (online) player; additionally requires the sender hold `ultibackup.admin` (a hand-coded body check, not a declared `@CmdMapping` permission — see Conventions) | command | `/backup admin create <player>` | ultibackup.use | player | admin | brief | BackupCommand#adminCreateBackup |
+| ultibackup.backup.admin-create | Create a manual backup for another (online) player; additionally requires the sender hold `ultibackup.admin` (a hand-coded body check, not a declared `@CmdMapping` permission — see Conventions); reads the target's inventory on the main thread and writes asynchronously, as `.create` does (fixed, `UltiKits/UltiBackup#13`) | command | `/backup admin create <player>` | ultibackup.use | player | admin | brief | BackupCommand#adminCreateBackup |
 | ultibackup.backup.admin-view | Open the backup browser GUI for another player's (online or offline) backups; additionally requires the sender hold `ultibackup.admin` (hand-coded body check) | command | `/backup admin <player>` | ultibackup.use | player | admin | brief | BackupCommand#adminBackups |
-| ultibackup.backup.create | Create a manual backup of the sender's own inventory/armor/ender chest/experience (per `BackupConfig`'s three include toggles); additionally requires the sender hold `ultibackup.create` (hand-coded body check); reads the player's live inventory off the main thread despite `@RunAsync` — a known product defect, `UltiKits/UltiBackup#13` | command | `/backup create` | ultibackup.use | player | player | brief | BackupCommand#createBackup |
+| ultibackup.backup.create | Create a manual backup of the sender's own inventory/armor/ender chest/experience (per `BackupConfig`'s three include toggles); additionally requires the sender hold `ultibackup.create` (hand-coded body check); reads the player's inventory, armor, off-hand, ender chest and experience on the main thread when the command runs, then writes the file and the database row asynchronously and replies when that is done (fixed, `UltiKits/UltiBackup#13`: the whole command used to run `@RunAsync`, reading the live inventory off the main thread) | command | `/backup create` | ultibackup.use | player | player | brief | BackupCommand#createBackup |
 | ultibackup.backup.help | Print the `/backup` command usage summary, with three admin-only lines shown only to a sender holding `ultibackup.admin` | command | `/backup help` | ultibackup.use | player | player | none | BackupCommand#help |
 | ultibackup.backup.list | List the sender's own backups (up to 5, newest first, with an overflow count for the rest) | command | `/backup list` | ultibackup.use | player | player | brief | BackupCommand#listBackups |
 | ultibackup.backup.open | Open the paginated backup browser GUI (`ultibackup.gui.backup-browser`) for the sender's own backups; this is the module's default (bare-argument) command | command | `/backup` (bare, no arguments) | ultibackup.use | player | player | brief | BackupCommand#openBackups |
 | ultibackup.backup.restore | Restore one of the sender's own backups by its list position, after SHA-256 checksum verification; on a checksum mismatch, reports failure and does NOT restore — the sender must separately run the `.restore-force` command below to override. Every part is read back before the inventory is touched; a part that cannot be read back refuses the restore with nothing changed (`UltiKits/UltiBackup#21`) | command | `/backup restore <number>` | ultibackup.use | player | player | brief | BackupCommand#restoreBackup |
 | ultibackup.backup.restore-force | Force-restore one of the sender's own backups by list position, SKIPPING checksum verification, through a confirmation dialogue (`ultibackup.gui.force-restore-confirm`) rather than restoring immediately | command | `/backup restore <number> force` | ultibackup.use | player | player | brief | BackupCommand#forceRestoreBackup |
-| ultibackup.backup.saveall | Create a manual backup for every currently online player who holds `ultibackup.auto`; additionally requires the sender hold `ultibackup.admin` (hand-coded body check); reads player inventories off the main thread despite `@RunAsync`, the same known defect as `.create` above, `UltiKits/UltiBackup#13` | command | `/backup saveall` | ultibackup.use | player | admin | brief | BackupCommand#saveAllPlayers |
+| ultibackup.backup.saveall | Create a manual backup for every currently online player who holds `ultibackup.auto`; additionally requires the sender hold `ultibackup.admin` (hand-coded body check); reads every player's inventory on the main thread when the command runs, writes the backups asynchronously, and then reports the count (fixed, `UltiKits/UltiBackup#13`, as `.create` above) | command | `/backup saveall` | ultibackup.use | player | admin | brief | BackupCommand#saveAllPlayers |
 
 ## GUI
 

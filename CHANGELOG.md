@@ -9,6 +9,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `/backup create`, `/backup saveall` and `/backup admin create <player>` now read the player's
+  inventory, armor, off-hand, ender chest and experience on the server's main thread, at the moment the
+  command runs; only writing the file and the database row happens in the background. The whole
+  command used to run in the background, so a backup could capture an inventory while it was changing
+  (UltiKits/UltiBackup#13).
+- `/backup create`、`/backup saveall` 与 `/backup admin create <玩家>` 现在在命令执行时于服务器主线程读取玩家的背包、护甲、副手、
+  末影箱与经验，只有写入文件和数据库在后台进行。此前整个命令都在后台运行，备份可能在背包变化的同时读取到不一致的内容
+  （UltiKits/UltiBackup#13）。
+
 - Restoring a backup whose items cannot be read no longer empties the player's inventory and reports
   success; the restore is refused and the inventory is left as it was. A backup file that is not
   valid YAML, that has no inventory section, that is cut off before its end, or whose entries are not
