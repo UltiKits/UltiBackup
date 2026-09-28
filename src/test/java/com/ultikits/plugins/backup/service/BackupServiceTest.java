@@ -1048,5 +1048,17 @@ class BackupServiceTest {
             assertThat(onTick.async()).isFalse();
             assertThat(BackupService.class.getMethod("autoBackupAll").getAnnotation(Scheduled.class)).isNull();
         }
+
+        /**
+         * The framework runs a scheduled method first after its {@code delay} (0 unless set), so a
+         * tick at registration would count a minute that has not passed: interval 1 would back up at
+         * once and interval N after N-1 minutes (third-party review, round 1).
+         */
+        @Test
+        @DisplayName("the first tick comes one minute after start, so the first backup comes a whole interval after it")
+        void firstTickAfterOneMinute() throws Exception {
+            Scheduled onTick = tick.getAnnotation(Scheduled.class);
+            assertThat(onTick.delay()).isEqualTo(onTick.period()).isEqualTo(1200L);
+        }
     }
 }
