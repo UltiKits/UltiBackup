@@ -52,7 +52,7 @@
 # 自动备份配置
 auto_backup:
   enabled: true                # 是否启用自动备份
-  interval: 30                 # 自动备份间隔（分钟）
+  interval: 30                 # 自动备份间隔（分钟）/ automatic backup interval (minutes)
   on_death: true               # 玩家死亡时备份
   on_quit: true                # 玩家退出时备份
 

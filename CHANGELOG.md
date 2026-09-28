@@ -9,6 +9,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `auto_backup.interval` in `config/backup.yml` now sets how often automatic backups run, in minutes as
+  documented (default 30, range 1-1440). It was read by nothing: automatic backups ran every 30 minutes
+  whatever it said. A value changed with `/ul reload` or the panel applies within a minute. The first
+  automatic backup now comes one interval after the module starts; it used to run as the module started
+  (UltiKits/UltiBackup#24).
+- `config/backup.yml` 中的 `auto_backup.interval` 现在按文档所写以分钟为单位决定自动备份的间隔（默认 30，范围 1-1440）。
+  此前没有任何代码读取它，无论写多少，自动备份都每 30 分钟执行一次。通过 `/ul reload` 或面板修改的值会在一分钟内生效。
+  第一次自动备份现在在模块启动后一个间隔时执行；此前模块启动时就会立即执行一次（UltiKits/UltiBackup#24）。
+
 - `/backup create`, `/backup saveall` and `/backup admin create <player>` now read the player's
   inventory, armor, off-hand, ender chest and experience on the server's main thread, at the moment the
   command runs; only writing the file and the database row happens in the background. The whole

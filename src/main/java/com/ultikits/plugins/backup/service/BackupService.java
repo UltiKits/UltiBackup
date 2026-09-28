@@ -47,6 +47,9 @@ public class BackupService {
     private File backupsDirectory;
     private Plugin bukkitPlugin;
 
+    /** Minutes counted since the last automatic backup, by {@link #autoBackupTick()}. Main thread only. */
+    private int minutesSinceAutoBackup = 0;
+
     /**
      * Initialize the service.
      * <p>
@@ -417,13 +420,37 @@ public class BackupService {
     }
     
     /**
-     * Auto backup all online players.
-     * Runs every 30 minutes (36000 ticks). Checks config.auto_backup.enabled before executing.
+     * Counts minutes toward {@code auto_backup.interval} and runs {@link #autoBackupAll()} each time
+     * the configured number of minutes has passed.
      * <p>
-     * 自动备份所有在线玩家。
-     * 每 30 分钟运行一次（36000 刻）。执行前检查 config.auto_backup.enabled。
+     * The interval is declared in minutes (1-1440). It used to be read by nothing: the backup ran on a
+     * fixed 36000-tick schedule, every 30 minutes whatever the file said (UltiKits/UltiBackup#24).
+     * The framework's config-bound {@code @Scheduled} reads its key in seconds, so binding this key
+     * would have turned an existing {@code interval: 30} into 30 seconds; counting minutes here keeps
+     * the key, its unit, its range and its default, and a value changed by {@code /ul reload} or the
+     * panel applies at the next minute.
+     * <p>
+     * 每分钟计数一次，达到 {@code auto_backup.interval}（分钟）时执行自动备份；修改后的值在下一分钟生效。
      */
-    @Scheduled(period = 36000, async = false)
+    @Scheduled(period = 1200, async = false)
+    public void autoBackupTick() {
+        if (!config.isAutoBackupEnabled()) {
+            return;
+        }
+        minutesSinceAutoBackup++;
+        if (minutesSinceAutoBackup >= config.getAutoBackupInterval()) {
+            minutesSinceAutoBackup = 0;
+            autoBackupAll();
+        }
+    }
+
+    /**
+     * Auto backup all online players. Run by {@link #autoBackupTick()} every
+     * {@code auto_backup.interval} minutes. Checks config.auto_backup.enabled before executing.
+     * <p>
+     * 自动备份所有在线玩家。由 {@link #autoBackupTick()} 每隔 {@code auto_backup.interval} 分钟调用。
+     * 执行前检查 config.auto_backup.enabled。
+     */
     public void autoBackupAll() {
         // Check if auto backup is enabled
         if (!config.isAutoBackupEnabled()) {
