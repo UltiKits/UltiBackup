@@ -432,7 +432,7 @@ public class BackupService {
      * <p>
      * 每分钟计数一次，达到 {@code auto_backup.interval}（分钟）时执行自动备份；修改后的值在下一分钟生效。
      */
-    @Scheduled(period = 1200, async = false)
+    @Scheduled(delay = 1200, period = 1200, async = false)
     public void autoBackupTick() {
         if (!config.isAutoBackupEnabled()) {
             return;
