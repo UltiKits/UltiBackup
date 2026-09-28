@@ -174,7 +174,11 @@ offhand: ...
 enderchest: ...
 expLevel: 30
 expProgress: 0.85
+complete: true
 ```
+
+`expLevel`/`expProgress` are written only when `backup_exp` was on for that backup; `complete` is always the last key. /
+仅当备份时开启了 `backup_exp` 才写入 `expLevel`/`expProgress`；`complete` 始终是最后一个键。
 
 恢复时自动验证校验和，检测到不匹配时提示用户选择强制恢复。
 

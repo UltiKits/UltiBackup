@@ -9,6 +9,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- A backup taken with `backup_exp: false` no longer resets the player's experience to level 0 when it is
+  restored after `backup_exp` was turned on. Such a backup now holds no experience at all, and restoring
+  it leaves experience as it is; its preview shows the level as not backed up. Backup files written by
+  earlier versions still load, and still restore the experience they carry (UltiKits/UltiBackup#27).
+- 在 `backup_exp: false` 时创建的备份，在之后开启 `backup_exp` 再恢复时，不再把玩家经验重置为 0 级。这类备份现在完全不含经验，
+  恢复时保持玩家当前经验不变；其预览中等级显示为未备份。旧版本写出的备份文件仍可加载，并照旧恢复其中的经验
+  （UltiKits/UltiBackup#27）。
+
 - `auto_backup.interval` in `config/backup.yml` now sets how often automatic backups run, in minutes as
   documented (default 30, range 1-1440). It was read by nothing: automatic backups ran every 30 minutes
   whatever it said. A value changed with `/ul reload` or the panel applies within a minute. The first

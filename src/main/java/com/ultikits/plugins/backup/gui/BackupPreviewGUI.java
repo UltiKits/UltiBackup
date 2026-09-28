@@ -160,7 +160,7 @@ public class BackupPreviewGUI implements InventoryHolder {
             List<String> lore = new ArrayList<>();
             lore.add(i18n("backup.preview.info_time").replace("{TIME}", metadata.getFormattedTime()));
             lore.add(i18n("backup.preview.info_reason").replace("{REASON}", metadata.getReasonDisplay(plugin)));
-            lore.add(i18n("backup.preview.info_level").replace("{LEVEL}", String.valueOf(content.getExpLevel())));
+            lore.add(levelLine(plugin, content));
             lore.add(i18n("backup.preview.info_world").replace("{WORLD}", metadata.getWorldName()));
             infoMeta.setLore(lore);
             info.setItemMeta(infoMeta);
@@ -232,5 +232,17 @@ public class BackupPreviewGUI implements InventoryHolder {
      */
     private String i18n(String key) {
         return plugin.i18n(key);
+    }
+
+    /**
+     * The info panel's level line: the backed-up level, or, for a backup taken with
+     * {@code backup_exp: false}, a line saying experience was not backed up -- such a backup holds
+     * no level, and showing 0 would read as one (UltiKits/UltiBackup#27).
+     */
+    static String levelLine(UltiToolsPlugin plugin, BackupContent content) {
+        if (!content.isExperienceCaptured()) {
+            return plugin.i18n("backup.preview.info_level_not_saved");
+        }
+        return plugin.i18n("backup.preview.info_level").replace("{LEVEL}", String.valueOf(content.getExpLevel()));
     }
 }
