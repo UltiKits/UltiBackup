@@ -97,6 +97,17 @@ public class BackupContent {
     private static final String END_MARKER = "complete";
 
     /**
+     * The key written first in every backup file since UltiKits/UltiBackup#27, naming its format. A
+     * file that has it must end with {@link #END_MARKER}; only a file without it is read by the
+     * earlier format's rule. Inferring the earlier format from a missing end marker alone would
+     * accept a current file cut off inside its last value.
+     */
+    private static final String FORMAT_KEY = "format";
+
+    /** The value of {@link #FORMAT_KEY} this version writes. */
+    private static final int FORMAT_VERSION = 2;
+
+    /**
      * A backup holding experience: the constructor this class had before
      * {@link #experienceCaptured} existed, kept so code built against it still compiles.
      *
@@ -168,6 +179,8 @@ public class BackupContent {
 
         // Create YAML content
         YamlConfiguration yaml = new YamlConfiguration();
+        // Written first: a file that has it is of this format and must end with the end marker.
+        yaml.set(FORMAT_KEY, FORMAT_VERSION);
         // Always written, even for an empty inventory: loadFromFile refuses a file without it.
         yaml.set("inventory", inventoryContents == null ? "" : inventoryContents);
         yaml.set("armor", armorContents);
@@ -230,7 +243,14 @@ public class BackupContent {
         if (marked && !(yaml.isBoolean(END_MARKER) && yaml.getBoolean(END_MARKER))) {
             throw new IOException("Backup file end marker is not true: " + file.getName());
         }
-        if (!marked && !yaml.contains("expProgress")) {
+        if (yaml.contains(FORMAT_KEY)) {
+            if (!yaml.isInt(FORMAT_KEY) || yaml.getInt(FORMAT_KEY) != FORMAT_VERSION) {
+                throw new IOException("Backup file format is not one this version reads: " + file.getName());
+            }
+            if (!marked) {
+                throw new IOException("Backup file is incomplete (no end marker): " + file.getName());
+            }
+        } else if (!marked && !yaml.contains("expProgress")) {
             throw new IOException("Backup file is incomplete (no end marker, and no expProgress, the last key of "
                     + "the earlier format): " + file.getName());
         }
