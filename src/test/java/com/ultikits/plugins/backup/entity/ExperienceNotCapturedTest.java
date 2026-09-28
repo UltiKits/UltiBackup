@@ -136,6 +136,28 @@ class ExperienceNotCapturedTest {
         assertThatThrownBy(() -> BackupContent.loadFromFile(earlierCut)).isInstanceOf(IOException.class);
     }
 
+    /**
+     * A file of the current format carries a format key first, so one cut off before its end marker
+     * is refused, not read as the earlier format -- even when the cut falls inside the experience
+     * progress, leaving a valid-looking shorter number (third-party review, round 2).
+     */
+    @Test
+    @DisplayName("a current file cut off inside expProgress is refused, not read as the earlier format")
+    void currentFileCutInsideExperienceIsRefused() throws Exception {
+        player.setLevel(12);
+        player.setExp(0.75f);
+        File whole = tempDir.resolve("whole.yml").toFile();
+        BackupContent.fromPlayer(player, true, true, true).saveToFile(whole);
+        String text = new String(java.nio.file.Files.readAllBytes(whole.toPath()), StandardCharsets.UTF_8);
+        int cut = text.indexOf("expProgress: 0") + "expProgress: 0".length();
+        assertThat(text.substring(cut)).as("control: the cut drops the rest of the value and the end marker")
+                .startsWith(".75").contains("complete");
+        File cutFile = written("cut-inside-exp.yml", text.substring(0, cut) + "\n");
+
+        assertThatThrownBy(() -> BackupContent.loadFromFile(cutFile)).isInstanceOf(IOException.class);
+        assertThat(BackupContent.loadFromFile(whole)).as("control: the whole file loads").isNotNull();
+    }
+
     @Test
     @DisplayName("experience level without progress, or progress without level, is refused")
     void halfTheExperienceIsRefused() throws Exception {
