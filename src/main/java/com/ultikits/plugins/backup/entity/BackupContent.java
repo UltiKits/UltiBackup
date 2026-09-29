@@ -79,6 +79,49 @@ public class BackupContent {
      * Experience progress (0.0 - 1.0).
      */
     private float expProgress;
+
+    /**
+     * Whether this backup holds the player's experience: false for a backup taken with
+     * {@code backup_exp: false}, whose file carries no experience keys, so a restore leaves the
+     * player's experience as it is whatever {@code backup_exp} says then (UltiKits/UltiBackup#27).
+     * A file in the format before that change always carries experience, and loads as captured.
+     */
+    @Builder.Default
+    private boolean experienceCaptured = true;
+
+    /**
+     * The key written last in every backup file since UltiKits/UltiBackup#27. A file cut off before it
+     * is not a whole backup; a file without it is in the earlier format, which always ended with
+     * {@code expProgress}.
+     */
+    private static final String END_MARKER = "complete";
+
+    /**
+     * The key written first in every backup file since UltiKits/UltiBackup#27, naming its format. A
+     * file that has it must end with {@link #END_MARKER}; only a file without it is read by the
+     * earlier format's rule. Inferring the earlier format from a missing end marker alone would
+     * accept a current file cut off inside its last value.
+     */
+    private static final String FORMAT_KEY = "format";
+
+    /** The value of {@link #FORMAT_KEY} this version writes. */
+    private static final int FORMAT_VERSION = 2;
+
+    /**
+     * A backup holding experience: the constructor this class had before
+     * {@link #experienceCaptured} existed, kept so code built against it still compiles.
+     *
+     * @param inventoryContents  serialized inventory
+     * @param armorContents      serialized armor, or {@code null} when armor was not captured
+     * @param offhandItem        serialized off-hand item
+     * @param enderchestContents serialized ender chest, or {@code null} when it was not captured
+     * @param expLevel           experience level
+     * @param expProgress        experience progress (0.0 - 1.0)
+     */
+    public BackupContent(String inventoryContents, String armorContents, String offhandItem,
+            String enderchestContents, int expLevel, float expProgress) {
+        this(inventoryContents, armorContents, offhandItem, enderchestContents, expLevel, expProgress, true);
+    }
     
     /**
      * Create backup content from player.
@@ -110,6 +153,7 @@ public class BackupContent {
         }
         
         // Experience
+        builder.experienceCaptured(backupExp);
         if (backupExp) {
             builder.expLevel(player.getLevel());
             builder.expProgress(player.getExp());
@@ -135,6 +179,8 @@ public class BackupContent {
 
         // Create YAML content
         YamlConfiguration yaml = new YamlConfiguration();
+        // Written first: a file that has it is of this format and must end with the end marker.
+        yaml.set(FORMAT_KEY, FORMAT_VERSION);
         // Always written, even for an empty inventory: loadFromFile refuses a file without it.
         yaml.set("inventory", inventoryContents == null ? "" : inventoryContents);
         yaml.set("armor", armorContents);
@@ -143,8 +189,14 @@ public class BackupContent {
         // one, the off-hand is never restored, so it is not written.
         yaml.set("offhand", armorContents == null ? null : (offhandItem == null ? "" : offhandItem));
         yaml.set("enderchest", enderchestContents);
-        yaml.set("expLevel", expLevel);
-        yaml.set("expProgress", expProgress);
+        // Experience is written only when it was captured, so a restore can tell a backup without it
+        // from one taken at level 0 (UltiKits/UltiBackup#27).
+        if (experienceCaptured) {
+            yaml.set("expLevel", expLevel);
+            yaml.set("expProgress", expProgress);
+        }
+        // Written last: loadFromFile refuses a file of this format that does not end with it.
+        yaml.set(END_MARKER, true);
 
         String yamlContent = yaml.saveToString();
 
@@ -175,8 +227,9 @@ public class BackupContent {
         // an EMPTY configuration, every part then reads as blank, and a restore would clear the
         // player's inventory and apply nothing (UltiKits/UltiBackup#21). A file this module wrote
         // always carries the "inventory" key (saveToFile sets it even for an empty inventory) and
-        // ends with "expProgress" (the last key it writes, always set), so a file without either is
-        // not a whole backup: saveToFile writes in one pass, and a crash or a full disk leaves a prefix.
+        // ends with the end marker (the last key it writes, always set) -- or, in the format before
+        // UltiKits/UltiBackup#27, with "expProgress" -- so a file without either is not a whole
+        // backup: saveToFile writes in one pass, and a crash or a full disk leaves a prefix.
         YamlConfiguration yaml = new YamlConfiguration();
         try {
             yaml.load(file);
@@ -186,9 +239,23 @@ public class BackupContent {
         if (!yaml.contains("inventory")) {
             throw new IOException("Backup file has no inventory section: " + file.getName());
         }
-        if (!yaml.contains("expProgress")) {
-            throw new IOException("Backup file is incomplete (no expProgress, its last key): " + file.getName());
+        boolean marked = yaml.contains(END_MARKER);
+        if (marked && !(yaml.isBoolean(END_MARKER) && yaml.getBoolean(END_MARKER))) {
+            throw new IOException("Backup file end marker is not true: " + file.getName());
         }
+        if (yaml.contains(FORMAT_KEY)) {
+            if (!yaml.isInt(FORMAT_KEY) || yaml.getInt(FORMAT_KEY) != FORMAT_VERSION) {
+                throw new IOException("Backup file format is not one this version reads: " + file.getName());
+            }
+            if (!marked) {
+                throw new IOException("Backup file is incomplete (no end marker): " + file.getName());
+            }
+        } else if (!marked && !yaml.contains("expProgress")) {
+            throw new IOException("Backup file is incomplete (no end marker, and no expProgress, the last key of "
+                    + "the earlier format): " + file.getName());
+        }
+        // Experience is both keys or neither: neither means it was not captured (UltiKits/UltiBackup#27).
+        boolean hasExperience = yaml.contains("expLevel") || yaml.contains("expProgress");
         // The typed getters below turn a missing or mistyped key into a default ("" or 0) that a
         // restore would apply. saveToFile writes the four parts as text, armor and off-hand together
         // or not at all, and both experience values as numbers, always: refuse any other shape here.
@@ -200,8 +267,8 @@ public class BackupContent {
         if (yaml.contains("armor") != yaml.contains("offhand")) {
             throw new IOException("Backup file has armor or off-hand without the other: " + file.getName());
         }
-        if (!yaml.isInt("expLevel") || !(yaml.get("expProgress") instanceof Number)) {
-            throw new IOException("Backup file experience is missing or not a number: " + file.getName());
+        if (hasExperience && (!yaml.isInt("expLevel") || !(yaml.get("expProgress") instanceof Number))) {
+            throw new IOException("Backup file experience is incomplete or not a number: " + file.getName());
         }
 
         return BackupContent.builder()
@@ -214,6 +281,7 @@ public class BackupContent {
             .enderchestContents(yaml.getString("enderchest", ""))
             .expLevel(yaml.getInt("expLevel", 0))
             .expProgress((float) yaml.getDouble("expProgress", 0.0))
+            .experienceCaptured(hasExperience)
             .build();
     }
     
@@ -312,6 +380,9 @@ public class BackupContent {
         if (restoreEnderchest && enderchestContents != null) {
             enderChest = readItems(enderchestContents, PART_ENDERCHEST);
         }
+        // Experience is restored only when this backup holds it: a backup taken without it leaves the
+        // player's experience as it is (UltiKits/UltiBackup#27).
+        restoreExp = restoreExp && experienceCaptured;
         // The server refuses a negative level and a progress outside 0-1 (NaN included), and those
         // calls come last, after the inventories are replaced: check them here, before anything.
         if (restoreExp) {

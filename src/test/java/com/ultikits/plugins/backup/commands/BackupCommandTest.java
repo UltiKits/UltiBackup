@@ -11,7 +11,10 @@ import org.bukkit.entity.Player;
 import org.junit.jupiter.api.*;
 import org.mockito.MockedStatic;
 
+import java.lang.reflect.Method;
 import java.util.*;
+import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -42,6 +45,27 @@ class BackupCommandTest {
     @AfterEach
     void tearDown() throws Exception {
         UltiBackupTestHelper.tearDown();
+    }
+
+    // The commands back up through BackupService#createBackupAsync and #saveAllOnlinePlayersAsync
+    // (UltiKits/UltiBackup#13). Both are reached reflectively so this class compiles against the
+    // service before they existed; without them these tests error.
+
+    private static Method createBackupAsync() throws Exception {
+        return BackupService.class.getMethod("createBackupAsync", Player.class, String.class, Consumer.class);
+    }
+
+    private static Method saveAllOnlinePlayersAsync() throws Exception {
+        return BackupService.class.getMethod("saveAllOnlinePlayersAsync", IntConsumer.class);
+    }
+
+    /** The service answers a backup of {@code target} for {@code reason} with {@code result}. */
+    @SuppressWarnings("unchecked")
+    private void givenBackupResult(Player target, String reason, BackupMetadata result) throws Exception {
+        createBackupAsync().invoke(doAnswer(invocation -> {
+            ((Consumer<BackupMetadata>) invocation.getArgument(2)).accept(result);
+            return null;
+        }).when(backupService), eq(target), eq(reason), any());
     }
 
     // ==================== listBackups ====================
@@ -105,22 +129,21 @@ class BackupCommandTest {
 
         @Test
         @DisplayName("Should create backup when permitted")
-        void withPermission() {
+        void withPermission() throws Exception {
             when(player.hasPermission("ultibackup.create")).thenReturn(true);
-            when(backupService.createBackup(player, "MANUAL"))
-                    .thenReturn(BackupMetadata.builder().build());
+            givenBackupResult(player, "MANUAL", BackupMetadata.builder().build());
 
             command.createBackup(player);
 
-            verify(backupService).createBackup(player, "MANUAL");
+            createBackupAsync().invoke(verify(backupService), eq(player), eq("MANUAL"), any());
             verify(player).sendMessage("backup.message.created");
         }
 
         @Test
         @DisplayName("Should show failure message when service returns null")
-        void createFails() {
+        void createFails() throws Exception {
             when(player.hasPermission("ultibackup.create")).thenReturn(true);
-            when(backupService.createBackup(player, "MANUAL")).thenReturn(null);
+            givenBackupResult(player, "MANUAL", null);
 
             command.createBackup(player);
 
@@ -196,14 +219,18 @@ class BackupCommandTest {
         }
 
         @Test
-        @DisplayName("Should call saveAllOnlinePlayers when permitted")
-        void withPermission() {
+        @DisplayName("Should back up every online player when permitted, and report the count")
+        void withPermission() throws Exception {
             when(player.hasPermission("ultibackup.admin")).thenReturn(true);
-            when(backupService.saveAllOnlinePlayers()).thenReturn(5);
+            saveAllOnlinePlayersAsync().invoke(doAnswer(invocation -> {
+                ((IntConsumer) invocation.getArgument(0)).accept(5);
+                return null;
+            }).when(backupService), new Object[] {any()});
 
             command.saveAllPlayers(player);
 
-            verify(backupService).saveAllOnlinePlayers();
+            saveAllOnlinePlayersAsync().invoke(verify(backupService), new Object[] {any()});
+            verify(player).sendMessage("backup.message.saveall_complete");
         }
     }
 
@@ -415,7 +442,7 @@ class BackupCommandTest {
 
         @Test
         @DisplayName("Should create backup for online target")
-        void createForTarget() {
+        void createForTarget() throws Exception {
             when(player.hasPermission("ultibackup.admin")).thenReturn(true);
 
             Player target = UltiBackupTestHelper.createMockPlayer("Target", UUID.randomUUID());
@@ -423,20 +450,19 @@ class BackupCommandTest {
             try (MockedStatic<Bukkit> bukkitMock = mockStatic(Bukkit.class)) {
                 bukkitMock.when(() -> Bukkit.getPlayerExact("Target"))
                         .thenReturn(target);
-                when(backupService.createBackup(target, "ADMIN"))
-                        .thenReturn(BackupMetadata.builder().build());
+                givenBackupResult(target, "ADMIN", BackupMetadata.builder().build());
 
                 command.adminCreateBackup(player, "Target");
             }
 
-            verify(backupService).createBackup(target, "ADMIN");
+            createBackupAsync().invoke(verify(backupService), eq(target), eq("ADMIN"), any());
             verify(player).sendMessage(argThat(
                     (String msg) -> msg.contains("admin_created")));
         }
 
         @Test
         @DisplayName("Should show failure when admin create returns null")
-        void createFailsForAdmin() {
+        void createFailsForAdmin() throws Exception {
             when(player.hasPermission("ultibackup.admin")).thenReturn(true);
 
             Player target = UltiBackupTestHelper.createMockPlayer("Target", UUID.randomUUID());
@@ -444,8 +470,7 @@ class BackupCommandTest {
             try (MockedStatic<Bukkit> bukkitMock = mockStatic(Bukkit.class)) {
                 bukkitMock.when(() -> Bukkit.getPlayerExact("Target"))
                         .thenReturn(target);
-                when(backupService.createBackup(target, "ADMIN"))
-                        .thenReturn(null);
+                givenBackupResult(target, "ADMIN", null);
 
                 command.adminCreateBackup(player, "Target");
             }

@@ -17,6 +17,8 @@ import com.ultikits.ultitools.annotations.PostConstruct;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 
 /**
  * Service for inventory backup operations.
@@ -45,6 +47,9 @@ public class BackupService {
     private File backupsDirectory;
     private Plugin bukkitPlugin;
 
+    /** Minutes counted since the last automatic backup, by {@link #autoBackupTick()}. Main thread only. */
+    private int minutesSinceAutoBackup = 0;
+
     /**
      * Initialize the service.
      * <p>
@@ -63,47 +68,141 @@ public class BackupService {
     }
     
     /**
-     * Create a backup for a player.
+     * Create a backup for a player, on the calling thread: {@link #snapshot} then {@link #write}.
+     * The caller must be on the server's main thread, since the snapshot reads the player.
      * <p>
-     * 为玩家创建备份。
+     * 为玩家创建备份（在调用线程上完成；调用方须在主线程）。
      *
      * @param player the player
      * @param reason the backup reason
      * @return the backup metadata
      */
     public BackupMetadata createBackup(Player player, String reason) {
-        // Create metadata
+        return write(snapshot(player, reason));
+    }
+
+    /**
+     * Takes everything a backup needs from the player -- metadata, inventory, armour, off-hand,
+     * ender chest and experience, already serialized to text -- so that writing it touches no
+     * player, entity or world state. Must run on the server's main thread: reading an inventory
+     * while the main thread changes it can give a torn copy (UltiKits/UltiBackup#13).
+     * <p>
+     * 在主线程上读取玩家的全部备份数据（已序列化为文本）；之后的写入不再访问玩家或世界状态。
+     *
+     * @param player the player
+     * @param reason the backup reason
+     * @return the snapshot, to be handed to {@link #write}
+     */
+    public PendingBackup snapshot(Player player, String reason) {
         BackupMetadata metadata = BackupMetadata.fromPlayer(player, reason);
-        
-        // Create content from player
         BackupContent content = BackupContent.fromPlayer(
             player,
             config.isBackupArmor(),
             config.isBackupEnderchest(),
             config.isBackupExp()
         );
-        
+        return new PendingBackup(metadata, content, player.getUniqueId(), player.getName());
+    }
+
+    /**
+     * Writes a snapshot: the backup file and its checksum, the database row, and the pruning of old
+     * backups. Reads nothing from the player, so it may run off the main thread.
+     * <p>
+     * 写入快照（文件、校验和、数据库、清理旧备份），不访问玩家，可在异步线程运行。
+     *
+     * @param pending the snapshot {@link #snapshot} took
+     * @return the backup metadata, or {@code null} if the file could not be written
+     */
+    public BackupMetadata write(PendingBackup pending) {
+        BackupMetadata metadata = pending.metadata;
         try {
             // Save cold data to file
             File backupFile = new File(bukkitPlugin.getDataFolder(), metadata.getFilePath());
-            String checksum = content.saveToFile(backupFile);
+            String checksum = pending.content.saveToFile(backupFile);
             metadata.setChecksum(checksum);
             
             // Save metadata to database
             dataOperator.insert(metadata);
             
             // Clean up old backups
-            cleanupOldBackups(UUID.fromString(player.getUniqueId().toString()));
+            cleanupOldBackups(pending.playerUuid);
             
             plugin.getLogger().info(plugin.i18n("backup.log.created")
-                .replace("{PLAYER}", player.getName())
+                .replace("{PLAYER}", pending.playerName)
                 .replace("{FILE}", metadata.getFilePath()));
             
             return metadata;
         } catch (IOException e) {
             plugin.getLogger().error(e, plugin.i18n("backup.log.create_failed")
-                .replace("{PLAYER}", player.getName()));
+                .replace("{PLAYER}", pending.playerName));
             return null;
+        }
+    }
+
+    /**
+     * Backs a player up for a command: the snapshot is taken now, on the calling (main) thread;
+     * the file and database writes run asynchronously; {@code whenWritten} then runs back on the main
+     * thread with the result ({@code null} on failure). This replaces running the whole command
+     * asynchronously, which read the inventory off the main thread (UltiKits/UltiBackup#13).
+     * <p>
+     * 命令用：立即在主线程取快照，异步写入，写完后回到主线程调用 {@code whenWritten}。
+     *
+     * @param player      the player, read now
+     * @param reason      the backup reason
+     * @param whenWritten receives the metadata, or {@code null}, on the main thread
+     */
+    public void createBackupAsync(Player player, String reason, Consumer<BackupMetadata> whenWritten) {
+        PendingBackup pending = snapshot(player, reason);
+        Bukkit.getScheduler().runTaskAsynchronously(bukkitPlugin, () -> {
+            BackupMetadata result = write(pending);
+            Bukkit.getScheduler().runTask(bukkitPlugin, () -> whenWritten.accept(result));
+        });
+    }
+
+    /**
+     * {@link #saveAllOnlinePlayers()} for a command: every snapshot is taken now, on the calling
+     * (main) thread; the writes run asynchronously; {@code whenWritten} then runs back on the main
+     * thread with the number of backups written (UltiKits/UltiBackup#13).
+     * <p>
+     * 命令用：立即在主线程为所有在线玩家取快照，异步写入，写完后回到主线程返回写入数量。
+     *
+     * @param whenWritten receives the number of backups written, on the main thread
+     */
+    public void saveAllOnlinePlayersAsync(IntConsumer whenWritten) {
+        List<PendingBackup> pending = new ArrayList<>();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (player.hasPermission("ultibackup.auto")) {
+                pending.add(snapshot(player, "ADMIN"));
+            }
+        }
+        Bukkit.getScheduler().runTaskAsynchronously(bukkitPlugin, () -> {
+            int count = 0;
+            for (PendingBackup backup : pending) {
+                if (write(backup) != null) {
+                    count++;
+                }
+            }
+            int written = count;
+            Bukkit.getScheduler().runTask(bukkitPlugin, () -> whenWritten.accept(written));
+        });
+    }
+
+    /**
+     * Everything one backup needs, read from the player on the main thread by {@link #snapshot}.
+     * <p>
+     * 一次备份所需的全部数据，由 {@link #snapshot} 在主线程读取。
+     */
+    public static final class PendingBackup {
+        private final BackupMetadata metadata;
+        private final BackupContent content;
+        private final UUID playerUuid;
+        private final String playerName;
+
+        PendingBackup(BackupMetadata metadata, BackupContent content, UUID playerUuid, String playerName) {
+            this.metadata = metadata;
+            this.content = content;
+            this.playerUuid = playerUuid;
+            this.playerName = playerName;
         }
     }
     
@@ -321,13 +420,37 @@ public class BackupService {
     }
     
     /**
-     * Auto backup all online players.
-     * Runs every 30 minutes (36000 ticks). Checks config.auto_backup.enabled before executing.
+     * Counts minutes toward {@code auto_backup.interval} and runs {@link #autoBackupAll()} each time
+     * the configured number of minutes has passed.
      * <p>
-     * 自动备份所有在线玩家。
-     * 每 30 分钟运行一次（36000 刻）。执行前检查 config.auto_backup.enabled。
+     * The interval is declared in minutes (1-1440). It used to be read by nothing: the backup ran on a
+     * fixed 36000-tick schedule, every 30 minutes whatever the file said (UltiKits/UltiBackup#24).
+     * The framework's config-bound {@code @Scheduled} reads its key in seconds, so binding this key
+     * would have turned an existing {@code interval: 30} into 30 seconds; counting minutes here keeps
+     * the key, its unit, its range and its default, and a value changed by {@code /ul reload} or the
+     * panel applies at the next minute.
+     * <p>
+     * 每分钟计数一次，达到 {@code auto_backup.interval}（分钟）时执行自动备份；修改后的值在下一分钟生效。
      */
-    @Scheduled(period = 36000, async = false)
+    @Scheduled(delay = 1200, period = 1200, async = false)
+    public void autoBackupTick() {
+        if (!config.isAutoBackupEnabled()) {
+            return;
+        }
+        minutesSinceAutoBackup++;
+        if (minutesSinceAutoBackup >= config.getAutoBackupInterval()) {
+            minutesSinceAutoBackup = 0;
+            autoBackupAll();
+        }
+    }
+
+    /**
+     * Auto backup all online players. Run by {@link #autoBackupTick()} every
+     * {@code auto_backup.interval} minutes. Checks config.auto_backup.enabled before executing.
+     * <p>
+     * 自动备份所有在线玩家。由 {@link #autoBackupTick()} 每隔 {@code auto_backup.interval} 分钟调用。
+     * 执行前检查 config.auto_backup.enabled。
+     */
     public void autoBackupAll() {
         // Check if auto backup is enabled
         if (!config.isAutoBackupEnabled()) {

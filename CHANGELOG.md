@@ -9,6 +9,32 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- A backup taken with `backup_exp: false` no longer resets the player's experience to level 0 when it is
+  restored after `backup_exp` was turned on. Such a backup now holds no experience at all, and restoring
+  it leaves experience as it is; its preview shows the level as not backed up. Backup files written by
+  earlier versions still load, and still restore the experience they carry (UltiKits/UltiBackup#27).
+- 在 `backup_exp: false` 时创建的备份，在之后开启 `backup_exp` 再恢复时，不再把玩家经验重置为 0 级。这类备份现在完全不含经验，
+  恢复时保持玩家当前经验不变；其预览中等级显示为未备份。旧版本写出的备份文件仍可加载，并照旧恢复其中的经验
+  （UltiKits/UltiBackup#27）。
+
+- `auto_backup.interval` in `config/backup.yml` now sets how often automatic backups run, in minutes as
+  documented (default 30, range 1-1440). It was read by nothing: automatic backups ran every 30 minutes
+  whatever it said. A value changed with `/ul reload` or the panel applies within a minute. The first
+  automatic backup now comes one interval after the module starts; it used to run as the module started
+  (UltiKits/UltiBackup#24).
+- `config/backup.yml` 中的 `auto_backup.interval` 现在按文档所写以分钟为单位决定自动备份的间隔（默认 30，范围 1-1440）。
+  此前没有任何代码读取它，无论写多少，自动备份都每 30 分钟执行一次。通过 `/ul reload` 或面板修改的值会在一分钟内生效。
+  第一次自动备份现在在模块启动后一个间隔时执行；此前模块启动时就会立即执行一次（UltiKits/UltiBackup#24）。
+
+- `/backup create`, `/backup saveall` and `/backup admin create <player>` now read the player's
+  inventory, armor, off-hand, ender chest and experience on the server's main thread, at the moment the
+  command runs; only writing the file and the database row happens in the background. The whole
+  command used to run in the background, so a backup could capture an inventory while it was changing
+  (UltiKits/UltiBackup#13).
+- `/backup create`、`/backup saveall` 与 `/backup admin create <玩家>` 现在在命令执行时于服务器主线程读取玩家的背包、护甲、副手、
+  末影箱与经验，只有写入文件和数据库在后台进行。此前整个命令都在后台运行，备份可能在背包变化的同时读取到不一致的内容
+  （UltiKits/UltiBackup#13）。
+
 - Restoring a backup whose items cannot be read no longer empties the player's inventory and reports
   success; the restore is refused and the inventory is left as it was. A backup file that is not
   valid YAML, that has no inventory section, that is cut off before its end, or whose entries are not

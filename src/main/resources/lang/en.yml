@@ -62,6 +62,7 @@ backup.preview.info: "Backup Info"
 backup.preview.info_time: "§7Time: §f{TIME}"
 backup.preview.info_reason: "§7Reason: {REASON}"
 backup.preview.info_level: "§7Level: §b{LEVEL}"
+backup.preview.info_level_not_saved: "§7Level: §8not backed up"
 backup.preview.info_world: "§7World: §f{WORLD}"
 
 # Force restore confirmation

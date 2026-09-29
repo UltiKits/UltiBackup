@@ -446,4 +446,33 @@ class BackupPreviewGUITest {
             assertThat(gui.isTabSlot(52)).isFalse();
         }
     }
+
+    // ==================== UltiKits/UltiBackup#27 ====================
+
+    @Nested
+    @DisplayName("the info panel says when experience was not backed up (UltiKits/UltiBackup#27)")
+    class ExperienceNotBackedUp {
+
+        /** The info panel's level line, reached reflectively: without the fix it does not exist. */
+        private String levelLine(BackupContent shown) throws Exception {
+            java.lang.reflect.Method line = BackupPreviewGUI.class.getDeclaredMethod(
+                    "levelLine", UltiToolsPlugin.class, BackupContent.class);
+            line.setAccessible(true);
+            return (String) line.invoke(null, plugin, shown);
+        }
+
+        @Test
+        @DisplayName("a backup without experience gets the not-backed-up line, not a level of 0")
+        void notBackedUp() throws Exception {
+            BackupContent.class.getMethod("setExperienceCaptured", boolean.class).invoke(content, false);
+
+            assertThat(levelLine(content)).isEqualTo("backup.preview.info_level_not_saved");
+        }
+
+        @Test
+        @DisplayName("control: a backup with experience gets its level")
+        void backedUp() throws Exception {
+            assertThat(levelLine(content)).isEqualTo("backup.preview.info_level");
+        }
+    }
 }

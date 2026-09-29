@@ -6,6 +6,7 @@ import com.ultikits.plugins.backup.entity.BackupContent;
 import com.ultikits.plugins.backup.entity.BackupMetadata;
 import com.ultikits.ultitools.interfaces.DataOperator;
 import com.ultikits.ultitools.interfaces.Query;
+import com.ultikits.ultitools.annotations.Scheduled;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -962,6 +963,102 @@ class BackupServiceTest {
             doReturn(null).when(metadata).getBackupFile();
 
             assertThat(service.verifyChecksum(metadata)).isFalse();
+        }
+    }
+
+    // ==================== UltiKits/UltiBackup#24 ====================
+
+    @Nested
+    @DisplayName("automatic backups follow auto_backup.interval, in minutes (UltiKits/UltiBackup#24)")
+    class AutoBackupInterval {
+
+        private BackupService spyService;
+        private java.lang.reflect.Method tick;
+
+        @BeforeEach
+        void minuteTick() throws Exception {
+            spyService = spy(service);
+            doNothing().when(spyService).autoBackupAll();
+            // Reached reflectively: without the fix the one-minute tick does not exist
+            tick = BackupService.class.getMethod("autoBackupTick");
+        }
+
+        private void ticks(int minutes) throws Exception {
+            for (int i = 0; i < minutes; i++) {
+                tick.invoke(spyService);
+            }
+        }
+
+        @Test
+        @DisplayName("interval 5: a backup after the fifth minute and the tenth, none before")
+        void everyFiveMinutes() throws Exception {
+            when(config.isAutoBackupEnabled()).thenReturn(true);
+            when(config.getAutoBackupInterval()).thenReturn(5);
+
+            ticks(4);
+            verify(spyService, never()).autoBackupAll();
+            ticks(1);
+            verify(spyService, times(1)).autoBackupAll();
+            ticks(5);
+            verify(spyService, times(2)).autoBackupAll();
+        }
+
+        @Test
+        @DisplayName("interval 120: nothing after 30 minutes, the shipped cadence")
+        void twoHoursIsNotThirtyMinutes() throws Exception {
+            when(config.isAutoBackupEnabled()).thenReturn(true);
+            when(config.getAutoBackupInterval()).thenReturn(120);
+
+            ticks(119);
+            verify(spyService, never()).autoBackupAll();
+            ticks(1);
+            verify(spyService, times(1)).autoBackupAll();
+        }
+
+        @Test
+        @DisplayName("a value changed by a reload applies at the next minute")
+        void changedValueApplies() throws Exception {
+            when(config.isAutoBackupEnabled()).thenReturn(true);
+            when(config.getAutoBackupInterval()).thenReturn(30);
+            ticks(10);
+            when(config.getAutoBackupInterval()).thenReturn(10);
+
+            ticks(1);
+
+            verify(spyService, times(1)).autoBackupAll();
+        }
+
+        @Test
+        @DisplayName("disabled: no backup however long it waits")
+        void disabledNeverBacksUp() throws Exception {
+            when(config.isAutoBackupEnabled()).thenReturn(false);
+            when(config.getAutoBackupInterval()).thenReturn(1);
+
+            ticks(3);
+
+            verify(spyService, never()).autoBackupAll();
+        }
+
+        @Test
+        @DisplayName("the tick runs every minute on the main thread; the old fixed 30-minute schedule is gone")
+        void schedule() throws Exception {
+            Scheduled onTick = tick.getAnnotation(Scheduled.class);
+            assertThat(onTick).isNotNull();
+            assertThat(onTick.period()).isEqualTo(1200L);
+            assertThat(onTick.async()).isFalse();
+            assertThat(BackupService.class.getMethod("autoBackupAll").getAnnotation(Scheduled.class)).isNull();
+        }
+
+        /**
+         * The framework runs a scheduled method first after its {@code delay} (0 unless set), so a
+         * tick at registration would count a minute that has not passed: interval 1 would back up at
+         * once and interval N after N-1 minutes (third-party review, round 1).
+         */
+        @Test
+        @DisplayName("the first tick comes one minute after start, so the first backup comes a whole interval after it")
+        void firstTickAfterOneMinute() throws Exception {
+            Scheduled onTick = tick.getAnnotation(Scheduled.class);
+            assertThat(onTick.delay()).isEqualTo(onTick.period()).isEqualTo(1200L);
         }
     }
 }

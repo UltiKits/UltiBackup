@@ -52,7 +52,7 @@
 # 自动备份配置
 auto_backup:
   enabled: true                # 是否启用自动备份
-  interval: 30                 # 自动备份间隔（分钟）
+  interval: 30                 # 自动备份间隔（分钟）/ automatic backup interval (minutes)
   on_death: true               # 玩家死亡时备份
   on_quit: true                # 玩家退出时备份
 
@@ -168,13 +168,18 @@ UltiBackup 采用冷热数据分离架构，优化存储性能：
 # DO NOT MODIFY THIS FILE! 请勿修改此文件！
 # Checksum: abc123def456...
 #
+format: 2
 inventory: ...
 armor: ...
 offhand: ...
 enderchest: ...
 expLevel: 30
 expProgress: 0.85
+complete: true
 ```
+
+`expLevel`/`expProgress` are written only when `backup_exp` was on for that backup; `format` is always the first key and `complete` always the last, so a file with `format` that does not end with `complete` is refused as incomplete. A file without `format` was written by an earlier version and still loads. /
+仅当备份时开启了 `backup_exp` 才写入 `expLevel`/`expProgress`；`format` 始终是第一个键，`complete` 始终是最后一个键，因此带有 `format` 却不以 `complete` 结尾的文件会被视为不完整而拒绝。不带 `format` 的文件由早期版本写入，仍可加载。
 
 恢复时自动验证校验和，检测到不匹配时提示用户选择强制恢复。
 

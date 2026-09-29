@@ -21,10 +21,11 @@ import java.util.stream.Collectors;
 
 /**
  * Backup command executor.
- * Uses BaseCommandExecutor with @CmdCD, @RunAsync annotations.
+ * Uses BaseCommandExecutor with @CmdCD. The backup-creating commands read the inventory on the main
+ * thread and write asynchronously through BackupService (UltiKits/UltiBackup#13).
  * <p>
  * 备份命令执行器。
- * 使用 BaseCommandExecutor，带有 @CmdCD、@RunAsync 注解。
+ * 使用 BaseCommandExecutor 与 @CmdCD。创建备份的命令在主线程读取背包，通过 BackupService 异步写入。
  *
  * @author wisdomme
  * @version 2.0.0
@@ -89,19 +90,21 @@ public class BackupCommand extends BaseCommandExecutor {
      */
     @CmdMapping(format = "create")
     @CmdCD(30)
-    @RunAsync
     public void createBackup(@CmdSender Player player) {
         if (!player.hasPermission("ultibackup.create")) {
             player.sendMessage(i18n("backup.message.no_permission"));
             return;
         }
         
-        BackupMetadata result = backupService.createBackup(player, "MANUAL");
-        if (result != null) {
-            player.sendMessage(i18n("backup.message.created"));
-        } else {
-            player.sendMessage(i18n("backup.message.create_failed"));
-        }
+        // Not @RunAsync: the inventory is read here, on the main thread; only the writes run
+        // asynchronously (UltiKits/UltiBackup#13)
+        backupService.createBackupAsync(player, "MANUAL", result -> {
+            if (result != null) {
+                player.sendMessage(i18n("backup.message.created"));
+            } else {
+                player.sendMessage(i18n("backup.message.create_failed"));
+            }
+        });
     }
     
     /**
@@ -151,16 +154,16 @@ public class BackupCommand extends BaseCommandExecutor {
      */
     @CmdMapping(format = "saveall")
     @CmdCD(60)
-    @RunAsync
     public void saveAllPlayers(@CmdSender Player sender) {
         if (!sender.hasPermission("ultibackup.admin")) {
             sender.sendMessage(i18n("backup.message.no_permission"));
             return;
         }
         
-        int count = backupService.saveAllOnlinePlayers();
-        sender.sendMessage(i18n("backup.message.saveall_complete")
-            .replace("{COUNT}", String.valueOf(count)));
+        // Not @RunAsync: every inventory is read here, on the main thread; only the writes run
+        // asynchronously (UltiKits/UltiBackup#13)
+        backupService.saveAllOnlinePlayersAsync(count -> sender.sendMessage(i18n("backup.message.saveall_complete")
+            .replace("{COUNT}", String.valueOf(count))));
     }
     
     /**
@@ -195,7 +198,6 @@ public class BackupCommand extends BaseCommandExecutor {
      */
     @CmdMapping(format = "admin create <player>")
     @CmdCD(30)
-    @RunAsync
     public void adminCreateBackup(
             @CmdSender Player sender, 
             @CmdParam(value = "player", suggest = "suggestOnlinePlayers") String targetName) {
@@ -211,13 +213,16 @@ public class BackupCommand extends BaseCommandExecutor {
             return;
         }
         
-        BackupMetadata result = backupService.createBackup(target, "ADMIN");
-        if (result != null) {
-            sender.sendMessage(i18n("backup.message.admin_created")
-                .replace("{PLAYER}", targetName));
-        } else {
-            sender.sendMessage(i18n("backup.message.create_failed"));
-        }
+        // Not @RunAsync: the target's inventory is read here, on the main thread; only the writes
+        // run asynchronously (UltiKits/UltiBackup#13)
+        backupService.createBackupAsync(target, "ADMIN", result -> {
+            if (result != null) {
+                sender.sendMessage(i18n("backup.message.admin_created")
+                    .replace("{PLAYER}", targetName));
+            } else {
+                sender.sendMessage(i18n("backup.message.create_failed"));
+            }
+        });
     }
     
     /**

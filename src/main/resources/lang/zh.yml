@@ -63,6 +63,7 @@ backup.preview.info: "备份信息"
 backup.preview.info_time: "§7时间: §f{TIME}"
 backup.preview.info_reason: "§7原因: {REASON}"
 backup.preview.info_level: "§7等级: §b{LEVEL}"
+backup.preview.info_level_not_saved: "§7等级: §8未备份"
 backup.preview.info_world: "§7世界: §f{WORLD}"
 
 # 强制恢复确认
