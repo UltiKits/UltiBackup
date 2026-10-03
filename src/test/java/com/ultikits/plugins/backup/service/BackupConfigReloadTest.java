@@ -87,6 +87,9 @@ class BackupConfigReloadTest {
             existing.add(metadata);
         }
         DataOperator<BackupMetadata> dataOperator = mock(DataOperator.class);
+        for (BackupMetadata metadata : existing) {
+            when(dataOperator.getById(metadata.getId())).thenReturn(metadata);
+        }
         Query<BackupMetadata> query = mock(Query.class);
         when(dataOperator.query()).thenReturn(query);
         when(query.where("player_uuid")).thenReturn(query);
