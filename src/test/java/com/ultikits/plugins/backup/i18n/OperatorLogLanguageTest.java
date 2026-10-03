@@ -154,6 +154,35 @@ class OperatorLogLanguageTest {
     }
 
     @Test
+    @DisplayName("backup file left behind after its row was removed, naming the file (UltiBackup#29)")
+    void fileDeleteFailed() throws Exception {
+        File stuck = tempDir.resolve("stuck").toFile();
+        assertThat(stuck.mkdir()).isTrue();
+        Files.write(new File(stuck, "child").toPath(), new byte[0]);
+        BackupMetadata metadata = spy(BackupMetadata.builder().filePath("stuck").build());
+        metadata.setId("backup-4");
+        doReturn(stuck).when(metadata).getBackupFile();
+        when(dataOperator.getById("backup-4")).thenReturn(metadata);
+
+        assertThat(service.deleteBackup(metadata)).isTrue();
+
+        verify(logger).warn(expected("backup.log.file_delete_failed", "{ID}", "backup-4", "{FILE}", stuck.getPath()));
+    }
+
+    @Test
+    @DisplayName("backup creation failed when the database insert threw")
+    void insertFailed() throws Exception {
+        useDataFolder(tempDir.toFile());
+        RuntimeException failure = new IllegalStateException("database down");
+        doThrow(failure).when(dataOperator).insert(any(BackupMetadata.class));
+
+        assertThat(service.createBackup(player, "MANUAL")).isNull();
+
+        verify(logger).error(org.mockito.ArgumentMatchers.eq(failure),
+                org.mockito.ArgumentMatchers.eq(expected("backup.log.create_failed", "{PLAYER}", "TestPlayer")));
+    }
+
+    @Test
     @DisplayName("checksum could not be read")
     void checksumUnreadable() throws Exception {
         BackupMetadata metadata = spy(BackupMetadata.builder().filePath("x.yml").checksum("abc").build());
