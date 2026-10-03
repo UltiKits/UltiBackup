@@ -736,6 +736,31 @@ class BackupServiceTest {
         }
 
         @Test
+        @DisplayName("Should still return the new backup when pruning old backups throws (UltiBackup#29)")
+        void pruneFailureDoesNotLoseTheNewBackup() throws Exception {
+            org.bukkit.plugin.Plugin bukkitPlugin = mock(org.bukkit.plugin.Plugin.class);
+            when(bukkitPlugin.getDataFolder()).thenReturn(tempDir.toFile());
+            UltiBackupTestHelper.setField(service, "bukkitPlugin", bukkitPlugin);
+            when(config.getMaxBackupsPerPlayer()).thenReturn(1);
+
+            BackupMetadata old = BackupMetadata.builder().playerUuid(playerUuid.toString()).backupTime(1L).build();
+            old.setId("old-0");
+            BackupMetadata older = BackupMetadata.builder().playerUuid(playerUuid.toString()).backupTime(0L).build();
+            older.setId("old-1");
+            when(dataOperator.getById("old-1")).thenReturn(older);
+            doThrow(new IllegalStateException("database down")).when(dataOperator).delById("old-1");
+            Query<BackupMetadata> query = mock(Query.class);
+            when(dataOperator.query()).thenReturn(query);
+            when(query.where("player_uuid")).thenReturn(query);
+            when(query.eq(anyString())).thenReturn(query);
+            when(query.list()).thenReturn(new ArrayList<>(Arrays.asList(old, older)));
+
+            BackupMetadata result = service.createBackup(player, "MANUAL");
+
+            assertThat(result).as("the backup itself was saved; a failed prune must not report it as failed").isNotNull();
+        }
+
+        @Test
         @DisplayName("Should trigger cleanup of old backups")
         void triggersCleanup() throws Exception {
             org.bukkit.plugin.Plugin bukkitPlugin = mock(org.bukkit.plugin.Plugin.class);

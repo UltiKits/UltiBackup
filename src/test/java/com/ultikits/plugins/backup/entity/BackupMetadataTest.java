@@ -744,10 +744,23 @@ class BackupMetadataTest {
                         .filePath("backups/to_delete.yml")
                         .build();
 
-                metadata.onDelete();
+                assertThat(metadata.deleteBackupFile()).isTrue();
             }
 
             assertThat(backupFile).doesNotExist();
+        }
+
+        @Test
+        @DisplayName("The onDelete hook leaves the file alone: the framework fires it before the row's DELETE runs (UltiBackup#29)")
+        void onDeleteHookKeepsTheFile() throws Exception {
+            File backupFile = tempDir.resolve("hook_keeps.yml").toFile();
+            assertThat(backupFile.createNewFile()).isTrue();
+            BackupMetadata metadata = org.mockito.Mockito.spy(BackupMetadata.builder().filePath("hook_keeps.yml").build());
+            org.mockito.Mockito.doReturn(backupFile).when(metadata).getBackupFile();
+
+            metadata.onDelete();
+
+            assertThat(backupFile).as("only BackupService#deleteBackup removes the file, after the row").exists();
         }
 
         @Test

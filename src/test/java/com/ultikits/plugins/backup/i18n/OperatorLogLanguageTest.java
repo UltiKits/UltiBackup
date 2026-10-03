@@ -183,6 +183,31 @@ class OperatorLogLanguageTest {
     }
 
     @Test
+    @DisplayName("pruning old backups failed after the new backup was saved (UltiBackup#29)")
+    @SuppressWarnings("unchecked")
+    void pruneFailed() throws Exception {
+        useDataFolder(tempDir.toFile());
+        when(config.getMaxBackupsPerPlayer()).thenReturn(1);
+        BackupMetadata newer = BackupMetadata.builder().backupTime(2L).build();
+        newer.setId("newer");
+        BackupMetadata older = BackupMetadata.builder().backupTime(1L).build();
+        older.setId("older");
+        when(dataOperator.getById("older")).thenReturn(older);
+        RuntimeException failure = new IllegalStateException("database down");
+        doThrow(failure).when(dataOperator).delById("older");
+        Query<BackupMetadata> query = mock(Query.class);
+        when(dataOperator.query()).thenReturn(query);
+        when(query.where("player_uuid")).thenReturn(query);
+        when(query.eq(anyString())).thenReturn(query);
+        when(query.list()).thenReturn(new ArrayList<>(Arrays.asList(newer, older)));
+
+        assertThat(service.createBackup(player, "MANUAL")).isNotNull();
+
+        verify(logger).warn(org.mockito.ArgumentMatchers.eq(failure),
+                org.mockito.ArgumentMatchers.eq(expected("backup.log.cleanup_failed", "{PLAYER}", "TestPlayer")));
+    }
+
+    @Test
     @DisplayName("checksum could not be read")
     void checksumUnreadable() throws Exception {
         BackupMetadata metadata = spy(BackupMetadata.builder().filePath("x.yml").checksum("abc").build());
