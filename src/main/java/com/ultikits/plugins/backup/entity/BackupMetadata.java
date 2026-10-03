@@ -69,13 +69,17 @@ public class BackupMetadata extends BaseDataEntity<String> {
     private int expLevel;
     
     /**
-     * Lifecycle hook: Delete associated cold data file when metadata is deleted.
+     * Lifecycle hook: deliberately does nothing. The framework fires it before the row's DELETE runs,
+     * so deleting the cold data file here could leave a row pointing at a missing file when that
+     * DELETE fails; {@code BackupService#deleteBackup} removes the file after the row instead
+     * (UltiKits/UltiBackup#29).
      * <p>
-     * 生命周期钩子：当元数据被删除时，删除关联的冷数据文件。
+     * 生命周期钩子：刻意不做任何事。框架在执行行的 DELETE 之前触发它，在此删除文件会在 DELETE 失败时留下指向
+     * 已丢失文件的记录；文件改由 {@code BackupService#deleteBackup} 在删除记录之后移除。
      */
     @Override
     public void onDelete() {
-        deleteBackupFile();
+        // intentionally empty, see the javadoc
     }
 
     /**

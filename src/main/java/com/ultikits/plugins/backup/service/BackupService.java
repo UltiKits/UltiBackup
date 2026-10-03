@@ -137,8 +137,13 @@ public class BackupService {
             return null;
         }
 
-        // Clean up old backups
-        cleanupOldBackups(pending.playerUuid);
+        // Clean up old backups; the new backup is saved, so a failed prune must not report it as failed
+        try {
+            cleanupOldBackups(pending.playerUuid);
+        } catch (RuntimeException e) {
+            plugin.getLogger().warn(e, plugin.i18n("backup.log.cleanup_failed")
+                .replace("{PLAYER}", pending.playerName));
+        }
 
         plugin.getLogger().info(plugin.i18n("backup.log.created")
             .replace("{PLAYER}", pending.playerName)
@@ -160,7 +165,7 @@ public class BackupService {
 
     private void warnFileNotDeleted(BackupMetadata metadata, File file) {
         plugin.getLogger().warn(plugin.i18n("backup.log.file_delete_failed")
-            .replace("{ID}", String.valueOf(metadata.getId()))
+            .replace("{ID}", metadata.getId() != null ? String.valueOf(metadata.getId()) : file.getName())
             .replace("{FILE}", file.getPath()));
     }
 

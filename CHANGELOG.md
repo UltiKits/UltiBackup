@@ -14,11 +14,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   example two admins deleting the same backup from open menus) now answers `Backup not found!` instead of
   `Backup deleted!`. If the file cannot be deleted after its row is gone, the console names the file.
   A database failure while saving a new backup now removes the backup file that was just written and tells the
-  player the backup failed, instead of leaving an orphan file and no reply (UltiKits/UltiBackup#29).
+  player the backup failed, instead of leaving an orphan file and no reply. A failure while pruning old backups
+  after a new one was saved is logged and no longer reports the saved backup as failed (UltiKits/UltiBackup#29).
 - 删除备份时现在先删除数据库记录、再删除内容文件，数据库删除失败不再留下指向已丢失文件的记录。删除一个记录已不存在的备份
   （例如两名管理员在各自打开的菜单中删除同一个备份）时，现在提示"找不到备份"而不是"备份已删除"；记录删除后若文件无法删除，
-  控制台会写出该文件。保存新备份时数据库出错，现在会删除刚写入的备份文件并告知玩家备份失败，不再留下孤立文件且无任何回复
-  （UltiKits/UltiBackup#29）。
+  控制台会写出该文件。保存新备份时数据库出错，现在会删除刚写入的备份文件并告知玩家备份失败，不再留下孤立文件且无任何回复；
+  新备份保存后清理旧备份出错时只记录日志，不再把已保存的备份报告为失败（UltiKits/UltiBackup#29）。
 
 - A backup taken with `backup_exp: false` no longer resets the player's experience to level 0 when it is
   restored after `backup_exp` was turned on. Such a backup now holds no experience at all, and restoring
