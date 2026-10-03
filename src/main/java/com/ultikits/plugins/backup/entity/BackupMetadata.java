@@ -75,10 +75,20 @@ public class BackupMetadata extends BaseDataEntity<String> {
      */
     @Override
     public void onDelete() {
+        deleteBackupFile();
+    }
+
+    /**
+     * Delete the cold data file.
+     * <p>
+     * 删除冷数据文件。
+     *
+     * @return true if the file is gone afterwards (including when there was none), false if it
+     *         exists and could not be deleted
+     */
+    public boolean deleteBackupFile() {
         File backupFile = getBackupFile();
-        if (backupFile != null && backupFile.exists()) {
-            backupFile.delete();
-        }
+        return backupFile == null || !backupFile.exists() || backupFile.delete();
     }
     
     /**
