@@ -720,6 +720,47 @@ class BackupServiceTest {
             }
         }
 
+        @SuppressWarnings("unchecked")
+        private void stubFilePathLookup(List<BackupMetadata> rows) {
+            Query<BackupMetadata> query = mock(Query.class);
+            when(dataOperator.query()).thenReturn(query);
+            when(query.where("file_path")).thenReturn(query);
+            when(query.eq(anyString())).thenReturn(query);
+            when(query.list()).thenReturn(rows);
+        }
+
+        @Test
+        @DisplayName("Should keep the file and report the backup saved when the insert threw but its row was written (UltiBackup#29, Codex P1)")
+        void insertThrewAfterCommitKeepsTheFile() throws Exception {
+            org.bukkit.plugin.Plugin bukkitPlugin = mock(org.bukkit.plugin.Plugin.class);
+            when(bukkitPlugin.getDataFolder()).thenReturn(tempDir.toFile());
+            UltiBackupTestHelper.setField(service, "bukkitPlugin", bukkitPlugin);
+            doThrow(new IllegalStateException("connection lost after commit")).when(dataOperator).insert(any(BackupMetadata.class));
+            stubFilePathLookup(new ArrayList<>(Arrays.asList(BackupMetadata.builder().build())));
+
+            BackupMetadata result = service.createBackup(player, "MANUAL");
+
+            assertThat(result).as("the row exists, so the backup was saved").isNotNull();
+            File created = new File(tempDir.toFile(), result.getFilePath());
+            assertThat(created).as("the file of a stored row must survive").exists();
+        }
+
+        @Test
+        @DisplayName("Should keep the file when the insert threw and the row lookup threw too (UltiBackup#29, Codex P1)")
+        void insertThrewAndLookupThrewKeepsTheFile() throws Exception {
+            org.bukkit.plugin.Plugin bukkitPlugin = mock(org.bukkit.plugin.Plugin.class);
+            when(bukkitPlugin.getDataFolder()).thenReturn(tempDir.toFile());
+            UltiBackupTestHelper.setField(service, "bukkitPlugin", bukkitPlugin);
+            doThrow(new IllegalStateException("database down")).when(dataOperator).insert(any(BackupMetadata.class));
+            when(dataOperator.query()).thenThrow(new IllegalStateException("database still down"));
+
+            BackupMetadata result = service.createBackup(player, "MANUAL");
+
+            assertThat(result).as("whether the row exists is unknown, so the sender is told it failed").isNull();
+            File[] kept = new File(tempDir.toFile(), "backups").listFiles();
+            assertThat(kept).as("an unconfirmed backup keeps its file").hasSize(1);
+        }
+
         @Test
         @DisplayName("Should remove the written file and return null when the database insert throws (UltiBackup#29)")
         void insertFailureLeavesNoOrphanFile() throws Exception {
@@ -727,6 +768,7 @@ class BackupServiceTest {
             when(bukkitPlugin.getDataFolder()).thenReturn(tempDir.toFile());
             UltiBackupTestHelper.setField(service, "bukkitPlugin", bukkitPlugin);
             doThrow(new IllegalStateException("database down")).when(dataOperator).insert(any(BackupMetadata.class));
+            stubFilePathLookup(new ArrayList<>());
 
             BackupMetadata result = service.createBackup(player, "MANUAL");
 
