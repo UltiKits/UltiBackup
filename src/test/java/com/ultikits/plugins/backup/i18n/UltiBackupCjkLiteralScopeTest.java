@@ -25,11 +25,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Language guard 2: no Chinese text in a {@code src/main/java} literal unless it is a catalogue key
  * or listed, with a written reason, in {@code src/test/resources/i18n/cjk-literal-exemptions.tsv}.
  * <p>
- * Detection contract, the same as the framework's {@code .github/scripts/check-cjk-scope.sh}: the
- * CJK Unified Ideographs block, U+4E00 through U+9FFF, and nothing wider. Unlike that script, this
- * guard is about literals, not comments: comments never count, and every string, character and
- * text-block literal counts after its Unicode and escape sequences are decoded. The literals come
- * from {@code javac}'s own syntax tree ({@link I18nSourceScanner}), not from a pattern match.
+ * Detection contract, the same as the framework's {@code .github/scripts/check-cjk-scope.sh}: a
+ * code point in the Han script ({@code Character.UnicodeScript.HAN}: the CJK Unified Ideographs
+ * block, its extensions, the supplementary ideograph planes, the compatibility ideographs and the
+ * radicals), in CJK Symbols and Punctuation (U+3000-U+303F), or in Halfwidth and Fullwidth Forms
+ * (U+FF00-U+FFEF). Kana (U+3040-U+30FF) is outside it. Unlike that script, this guard is about
+ * literals, not comments: comments never count, and every string, character and text-block literal
+ * counts after its Unicode and escape sequences are decoded. The literals come from {@code javac}'s
+ * own syntax tree ({@link I18nSourceScanner}), not from a pattern match.
  * <p>
  * Exemption file format: one line per literal, {@code path<TAB>exact literal<TAB>reason}. The path
  * is relative to the module root; the literal is the text between the quotes exactly as written in
@@ -399,6 +402,84 @@ class UltiBackupCjkLiteralScopeTest {
             List<String> tsv = Collections.singletonList("src/main/java/Sample.java\t\u4e2d\tgone");
             assertThat(exemptionProblems(tsv, Collections.singletonList(f)))
                     .singleElement().asString().contains("is stale");
+        }
+    }
+
+    @Nested
+    @DisplayName("the detection contract: the framework's check-cjk-scope.sh, character for character")
+    class DetectionContract {
+
+        @Test
+        @DisplayName("CJK Extension A (U+3400, a planted character) is detected, in a catalogue value and in a literal")
+        void extensionAIsDetected() {
+            assertThat(I18nSourceScanner.containsCjk("\u3400")).isTrue();
+            assertThat(check("String s = \"\u3400\";")).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("a supplementary-plane ideograph (U+20000, a surrogate pair) is detected as one code point")
+        void supplementaryIdeographIsDetected() {
+            assertThat(I18nSourceScanner.containsCjk("\uD840\uDC00")).isTrue();
+            assertThat(check("String s = \"a\uD840\uDC00b\";")).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("a compatibility ideograph (U+F900) is detected")
+        void compatibilityIdeographIsDetected() {
+            assertThat(I18nSourceScanner.containsCjk("\uF900")).isTrue();
+            assertThat(check("String s = \"\uF900\";")).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("a Kangxi radical (U+2F00) and a CJK radical supplement character (U+2E80) are detected")
+        void radicalsAreDetected() {
+            assertThat(I18nSourceScanner.containsCjk("\u2F00")).isTrue();
+            assertThat(I18nSourceScanner.containsCjk("\u2E80")).isTrue();
+        }
+
+        @Test
+        @DisplayName("CJK symbols and punctuation (U+3001, the ideographic comma) are detected")
+        void cjkPunctuationIsDetected() {
+            assertThat(I18nSourceScanner.containsCjk("\u3001")).isTrue();
+            assertThat(check("String s = \"a\u3001b\";")).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("a full-width form (U+FF1A, the full-width colon) is detected")
+        void fullWidthFormIsDetected() {
+            assertThat(I18nSourceScanner.containsCjk("\uFF1A")).isTrue();
+            assertThat(check("String s = \"a\uFF1Ab\";")).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("the edges of the two ranges: U+3000, U+303F, U+FF00 and U+FFEF are in; U+3040, U+FEFF and U+FFF0 are out")
+        void rangeEdges() {
+            for (String in : new String[] {"\u3000", "\u303F", "\uFF00", "\uFFEF"}) {
+                assertThat(I18nSourceScanner.containsCjk(in)).as("in: " + in.codePointAt(0)).isTrue();
+            }
+            for (String out : new String[] {"\u3040", "\uFEFF", "\uFFF0"}) {
+                assertThat(I18nSourceScanner.containsCjk(out)).as("out: " + out.codePointAt(0)).isFalse();
+            }
+        }
+
+        @Test
+        @DisplayName("control: kana (hiragana U+3042, katakana U+30A2) is not detected, so the widening did not swallow it")
+        void kanaIsNotDetected() {
+            assertThat(I18nSourceScanner.containsCjk("\u3042\u30A2")).isFalse();
+            assertThat(check("String s = \"\u3042\u30A2\";")).isEmpty();
+        }
+
+        @Test
+        @DisplayName("control: ASCII, Latin text, a lone surrogate and the symbols this module prints are not detected")
+        void ordinaryTextIsNotDetected() {
+            assertThat(I18nSourceScanner.containsCjk("$1,000.00 \u00A7a\u00A7l caf\u00E9 \u2014 100%")).isFalse();
+            assertThat(I18nSourceScanner.containsCjk("\uD840")).as("a lone high surrogate is not a code point of Han").isFalse();
+        }
+
+        @Test
+        @DisplayName("control: the original range (U+4E2D) is still detected")
+        void originalRangeIsStillDetected() {
+            assertThat(I18nSourceScanner.containsCjk("\u4e2d")).isTrue();
         }
     }
 

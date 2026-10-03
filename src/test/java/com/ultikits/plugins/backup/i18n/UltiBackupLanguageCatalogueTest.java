@@ -885,6 +885,18 @@ class UltiBackupLanguageCatalogueTest {
         }
 
         @Test
+        @DisplayName("full-width punctuation, a symbol and an extension-plane ideograph in the English catalogue are reported (guard widening, UltiKits/UltiRemoteBag#44)")
+        void widenedRangesAreReportedInEnglish() throws IOException {
+            List<String> problems = chineseTextInEnglish(Arrays.asList(
+                    yaml("en", "a: \"Paid\uFF1A\"\nb: \"x\u3001y\"\nc: \"\uD840\uDC00\"\nd: \"\u3400\"\ne: \"\u3042\"\nf: \"$1,000\"\n"),
+                    yaml("zh", "a: \"\u4e2d\"\n")));
+            // Kana (e) and plain text (f) are the controls; a-d each hold a character outside U+4E00-U+9FFF only.
+            assertThat(problems).hasSize(4);
+            assertThat(problems).anyMatch(p -> p.contains("\"a\"")).anyMatch(p -> p.contains("\"b\""))
+                    .anyMatch(p -> p.contains("\"c\"")).anyMatch(p -> p.contains("\"d\""));
+        }
+
+        @Test
         @DisplayName("a placeholder a translation drops or renames is reported")
         void placeholderMismatchIsReported() throws IOException {
             List<String> problems = placeholderMismatches(Arrays.asList(
