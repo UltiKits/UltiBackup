@@ -130,11 +130,24 @@ public class BackupService {
             // Save metadata to database
             dataOperator.insert(metadata);
         } catch (RuntimeException e) {
-            // The file is already on disk; without its row nothing can list or prune it (UltiBackup#29)
-            removeOrphanFile(backupFile, metadata);
-            plugin.getLogger().error(e, plugin.i18n("backup.log.create_failed")
-                .replace("{PLAYER}", pending.playerName));
-            return null;
+            // An error does not prove nothing was committed (a connection lost after the commit), so the
+            // file is removed only once the row is confirmed absent (UltiBackup#29)
+            Boolean stored = rowExistsFor(metadata);
+            if (stored == null) {
+                plugin.getLogger().error(e, plugin.i18n("backup.log.insert_unconfirmed")
+                    .replace("{PLAYER}", pending.playerName)
+                    .replace("{FILE}", metadata.getFilePath()));
+                return null;
+            }
+            if (!stored) {
+                removeOrphanFile(backupFile, metadata);
+                plugin.getLogger().error(e, plugin.i18n("backup.log.create_failed")
+                    .replace("{PLAYER}", pending.playerName));
+                return null;
+            }
+            plugin.getLogger().warn(e, plugin.i18n("backup.log.insert_error_but_stored")
+                .replace("{PLAYER}", pending.playerName)
+                .replace("{FILE}", metadata.getFilePath()));
         }
 
         // Clean up old backups; the new backup is saved, so a failed prune must not report it as failed
@@ -150,6 +163,23 @@ public class BackupService {
             .replace("{FILE}", metadata.getFilePath()));
 
         return metadata;
+    }
+
+    /**
+     * Whether a row for this backup's file is stored.
+     * <p>
+     * 该备份文件对应的数据库记录是否已存在。
+     *
+     * @return true if a row exists, false if none does, null if the lookup itself failed
+     */
+    private Boolean rowExistsFor(BackupMetadata metadata) {
+        try {
+            return !dataOperator.query()
+                .where("file_path").eq(metadata.getFilePath())
+                .list().isEmpty();
+        } catch (RuntimeException lookupFailure) {
+            return null;
+        }
     }
 
     /**

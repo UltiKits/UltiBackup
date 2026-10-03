@@ -102,3 +102,5 @@ backup.log.restore_unreadable: "Backup {ID} was not restored to {PLAYER}: its {P
 backup.log.preview_unreadable: "Backup {ID}: its {PART} data cannot be read, so the preview shows it as empty"
 backup.log.file_delete_failed: "Backup {ID} has no database row, but its file could not be deleted: {FILE}"
 backup.log.cleanup_failed: "Pruning old backups for {PLAYER} failed; the new backup was saved"
+backup.log.insert_unconfirmed: "Saving a backup for {PLAYER} failed with a database error and whether its row was written could not be checked; the backup file was kept: {FILE}"
+backup.log.insert_error_but_stored: "Saving a backup for {PLAYER} reported a database error, but its row was written; the backup was kept: {FILE}"
