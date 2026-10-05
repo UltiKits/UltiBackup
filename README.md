@@ -219,9 +219,9 @@ complete: true
 - 🇨🇳 简体中文 (zh)
 - 🇺🇸 English (en)
 
-语言文件位置：`plugins/UltiTools/UltiBackup/lang/`
+语言文件位置：`plugins/UltiTools/pluginConfig/UltiBackup/lang/`
 
-添加新语言：创建 `{语言代码}.yml` 文件并翻译所有键值。
+官方语言文件（`zh.yml`、`en.yml`）归 UltiTools 所有：与本版本自带内容不同的官方文件会在每次启动和每次模块重载时被恢复，原文件保留为 `.bak`。要自定义消息或添加翻译：在同一目录中把官方文件复制为以其语言代码加连字符开头的文件（例如 `en-ja.yml`），修改或翻译副本，并在 `plugins/UltiTools/config.yml` 中设置 `language: en-ja`（整个服务器唯一的语言设置）。副本中缺少的条目使用文件名开头那种官方语言的文本；文件名为其他形式时（例如 `ja.yml`），缺少的条目显示英文，并记录一条警告（UltiKits/UltiTools-Reborn#616）。
 
 ## 📝 更新日志
 
