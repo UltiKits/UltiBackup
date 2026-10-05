@@ -154,6 +154,100 @@ class OperatorLogLanguageTest {
     }
 
     @Test
+    @DisplayName("backup file left behind after its row was removed, naming the file (UltiBackup#29)")
+    void fileDeleteFailed() throws Exception {
+        File stuck = tempDir.resolve("stuck").toFile();
+        assertThat(stuck.mkdir()).isTrue();
+        Files.write(new File(stuck, "child").toPath(), new byte[0]);
+        BackupMetadata metadata = spy(BackupMetadata.builder().filePath("stuck").build());
+        metadata.setId("backup-4");
+        doReturn(stuck).when(metadata).getBackupFile();
+        when(dataOperator.getById("backup-4")).thenReturn(metadata);
+
+        assertThat(service.deleteBackup(metadata)).isTrue();
+
+        verify(logger).warn(expected("backup.log.file_delete_failed", "{ID}", "backup-4", "{FILE}", stuck.getPath()));
+    }
+
+    @Test
+    @DisplayName("backup creation failed when the database insert threw")
+    void insertFailed() throws Exception {
+        useDataFolder(tempDir.toFile());
+        RuntimeException failure = new IllegalStateException("database down");
+        doThrow(failure).when(dataOperator).insert(any(BackupMetadata.class));
+        stubFilePathLookup(new ArrayList<>());
+
+        assertThat(service.createBackup(player, "MANUAL")).isNull();
+
+        verify(logger).error(org.mockito.ArgumentMatchers.eq(failure),
+                org.mockito.ArgumentMatchers.eq(expected("backup.log.create_failed", "{PLAYER}", "TestPlayer")));
+    }
+
+    @SuppressWarnings("unchecked")
+    private void stubFilePathLookup(java.util.List<BackupMetadata> rows) {
+        Query<BackupMetadata> query = mock(Query.class);
+        when(dataOperator.query()).thenReturn(query);
+        when(query.where("file_path")).thenReturn(query);
+        when(query.eq(anyString())).thenReturn(query);
+        when(query.list()).thenReturn(rows);
+    }
+
+    @Test
+    @DisplayName("database error on insert, but the row was written: the backup is kept (UltiBackup#29, Codex P1)")
+    void insertErrorButStored() throws Exception {
+        useDataFolder(tempDir.toFile());
+        RuntimeException failure = new IllegalStateException("connection lost after commit");
+        doThrow(failure).when(dataOperator).insert(any(BackupMetadata.class));
+        stubFilePathLookup(new ArrayList<>(Arrays.asList(BackupMetadata.builder().build())));
+
+        BackupMetadata result = service.createBackup(player, "MANUAL");
+
+        assertThat(result).isNotNull();
+        verify(logger).warn(org.mockito.ArgumentMatchers.eq(failure), org.mockito.ArgumentMatchers.eq(
+                expected("backup.log.insert_error_but_stored", "{PLAYER}", "TestPlayer", "{FILE}", result.getFilePath())));
+    }
+
+    @Test
+    @DisplayName("database error on insert and the row could not be checked: the file is kept and the log says so (UltiBackup#29, Codex P1)")
+    void insertErrorUnconfirmed() throws Exception {
+        useDataFolder(tempDir.toFile());
+        RuntimeException failure = new IllegalStateException("database down");
+        doThrow(failure).when(dataOperator).insert(any(BackupMetadata.class));
+        when(dataOperator.query()).thenThrow(new IllegalStateException("database still down"));
+
+        assertThat(service.createBackup(player, "MANUAL")).isNull();
+
+        String prefix = expected("backup.log.insert_unconfirmed", "{PLAYER}", "TestPlayer", "{FILE}", "");
+        verify(logger).error(org.mockito.ArgumentMatchers.eq(failure), org.mockito.ArgumentMatchers.argThat(
+                (String line) -> line.startsWith(prefix) && line.contains("backups")));
+    }
+
+    @Test
+    @DisplayName("pruning old backups failed after the new backup was saved (UltiBackup#29)")
+    @SuppressWarnings("unchecked")
+    void pruneFailed() throws Exception {
+        useDataFolder(tempDir.toFile());
+        when(config.getMaxBackupsPerPlayer()).thenReturn(1);
+        BackupMetadata newer = BackupMetadata.builder().backupTime(2L).build();
+        newer.setId("newer");
+        BackupMetadata older = BackupMetadata.builder().backupTime(1L).build();
+        older.setId("older");
+        when(dataOperator.getById("older")).thenReturn(older);
+        RuntimeException failure = new IllegalStateException("database down");
+        doThrow(failure).when(dataOperator).delById("older");
+        Query<BackupMetadata> query = mock(Query.class);
+        when(dataOperator.query()).thenReturn(query);
+        when(query.where("player_uuid")).thenReturn(query);
+        when(query.eq(anyString())).thenReturn(query);
+        when(query.list()).thenReturn(new ArrayList<>(Arrays.asList(newer, older)));
+
+        assertThat(service.createBackup(player, "MANUAL")).isNotNull();
+
+        verify(logger).warn(org.mockito.ArgumentMatchers.eq(failure),
+                org.mockito.ArgumentMatchers.eq(expected("backup.log.cleanup_failed", "{PLAYER}", "TestPlayer")));
+    }
+
+    @Test
     @DisplayName("checksum could not be read")
     void checksumUnreadable() throws Exception {
         BackupMetadata metadata = spy(BackupMetadata.builder().filePath("x.yml").checksum("abc").build());

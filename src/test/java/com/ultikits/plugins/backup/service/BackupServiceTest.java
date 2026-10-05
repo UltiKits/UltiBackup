@@ -242,10 +242,59 @@ class BackupServiceTest {
             // in onDelete(). The file won't be deleted but DB delete still happens.
             BackupMetadata metadata = BackupMetadata.builder().build();
             metadata.setId("delete-id");
+            when(dataOperator.getById("delete-id")).thenReturn(metadata);
 
             service.deleteBackup(metadata);
 
             verify(dataOperator).delById("delete-id");
+        }
+
+        @Test
+        @DisplayName("Should report failure and delete nothing when the row is already gone (UltiBackup#29)")
+        void missingRowReportsFailure() throws Exception {
+            File backupFile = tempDir.resolve("gone.yml").toFile();
+            assertThat(backupFile.createNewFile()).isTrue();
+            BackupMetadata metadata = spy(BackupMetadata.builder().filePath("gone.yml").build());
+            metadata.setId("gone-id");
+            doReturn(backupFile).when(metadata).getBackupFile();
+            when(dataOperator.getById("gone-id")).thenReturn(null);
+
+            boolean result = service.deleteBackup(metadata);
+
+            assertThat(result).isFalse();
+            verify(dataOperator, never()).delById(anyString());
+        }
+
+        @Test
+        @DisplayName("Should remove the row before the file, so a failed row delete leaves the file in place (UltiBackup#29)")
+        void rowIsDeletedBeforeTheFile() throws Exception {
+            File backupFile = tempDir.resolve("ordered.yml").toFile();
+            assertThat(backupFile.createNewFile()).isTrue();
+            BackupMetadata metadata = spy(BackupMetadata.builder().filePath("ordered.yml").build());
+            metadata.setId("ordered-id");
+            doReturn(backupFile).when(metadata).getBackupFile();
+            when(dataOperator.getById("ordered-id")).thenReturn(metadata);
+            doThrow(new IllegalStateException("database down")).when(dataOperator).delById("ordered-id");
+
+            assertThatThrownBy(() -> service.deleteBackup(metadata)).isInstanceOf(IllegalStateException.class);
+
+            assertThat(backupFile).as("the file stays while its row could not be removed").exists();
+        }
+
+        @Test
+        @DisplayName("Should delete the file once the row is gone")
+        void fileIsDeletedAfterTheRow() throws Exception {
+            File backupFile = tempDir.resolve("both.yml").toFile();
+            assertThat(backupFile.createNewFile()).isTrue();
+            BackupMetadata metadata = spy(BackupMetadata.builder().filePath("both.yml").build());
+            metadata.setId("both-id");
+            doReturn(backupFile).when(metadata).getBackupFile();
+            when(dataOperator.getById("both-id")).thenReturn(metadata);
+
+            assertThat(service.deleteBackup(metadata)).isTrue();
+
+            verify(dataOperator).delById("both-id");
+            assertThat(backupFile).doesNotExist();
         }
 
         @Test
@@ -568,6 +617,7 @@ class BackupServiceTest {
         void returnsTrue() {
             BackupMetadata metadata = BackupMetadata.builder().build();
             metadata.setId("valid-id");
+            when(dataOperator.getById("valid-id")).thenReturn(metadata);
 
             boolean result = service.deleteBackup(metadata);
 
@@ -670,6 +720,88 @@ class BackupServiceTest {
             }
         }
 
+        @SuppressWarnings("unchecked")
+        private void stubFilePathLookup(List<BackupMetadata> rows) {
+            Query<BackupMetadata> query = mock(Query.class);
+            when(dataOperator.query()).thenReturn(query);
+            when(query.where("file_path")).thenReturn(query);
+            when(query.eq(anyString())).thenReturn(query);
+            when(query.list()).thenReturn(rows);
+        }
+
+        @Test
+        @DisplayName("Should keep the file and report the backup saved when the insert threw but its row was written (UltiBackup#29, Codex P1)")
+        void insertThrewAfterCommitKeepsTheFile() throws Exception {
+            org.bukkit.plugin.Plugin bukkitPlugin = mock(org.bukkit.plugin.Plugin.class);
+            when(bukkitPlugin.getDataFolder()).thenReturn(tempDir.toFile());
+            UltiBackupTestHelper.setField(service, "bukkitPlugin", bukkitPlugin);
+            doThrow(new IllegalStateException("connection lost after commit")).when(dataOperator).insert(any(BackupMetadata.class));
+            stubFilePathLookup(new ArrayList<>(Arrays.asList(BackupMetadata.builder().build())));
+
+            BackupMetadata result = service.createBackup(player, "MANUAL");
+
+            assertThat(result).as("the row exists, so the backup was saved").isNotNull();
+            File created = new File(tempDir.toFile(), result.getFilePath());
+            assertThat(created).as("the file of a stored row must survive").exists();
+        }
+
+        @Test
+        @DisplayName("Should keep the file when the insert threw and the row lookup threw too (UltiBackup#29, Codex P1)")
+        void insertThrewAndLookupThrewKeepsTheFile() throws Exception {
+            org.bukkit.plugin.Plugin bukkitPlugin = mock(org.bukkit.plugin.Plugin.class);
+            when(bukkitPlugin.getDataFolder()).thenReturn(tempDir.toFile());
+            UltiBackupTestHelper.setField(service, "bukkitPlugin", bukkitPlugin);
+            doThrow(new IllegalStateException("database down")).when(dataOperator).insert(any(BackupMetadata.class));
+            when(dataOperator.query()).thenThrow(new IllegalStateException("database still down"));
+
+            BackupMetadata result = service.createBackup(player, "MANUAL");
+
+            assertThat(result).as("whether the row exists is unknown, so the sender is told it failed").isNull();
+            File[] kept = new File(tempDir.toFile(), "backups").listFiles();
+            assertThat(kept).as("an unconfirmed backup keeps its file").hasSize(1);
+        }
+
+        @Test
+        @DisplayName("Should remove the written file and return null when the database insert throws (UltiBackup#29)")
+        void insertFailureLeavesNoOrphanFile() throws Exception {
+            org.bukkit.plugin.Plugin bukkitPlugin = mock(org.bukkit.plugin.Plugin.class);
+            when(bukkitPlugin.getDataFolder()).thenReturn(tempDir.toFile());
+            UltiBackupTestHelper.setField(service, "bukkitPlugin", bukkitPlugin);
+            doThrow(new IllegalStateException("database down")).when(dataOperator).insert(any(BackupMetadata.class));
+            stubFilePathLookup(new ArrayList<>());
+
+            BackupMetadata result = service.createBackup(player, "MANUAL");
+
+            assertThat(result).isNull();
+            File[] orphans = new File(tempDir.toFile(), "backups").listFiles();
+            assertThat(orphans == null ? new File[0] : orphans).as("no backup file is left without its row").isEmpty();
+        }
+
+        @Test
+        @DisplayName("Should still return the new backup when pruning old backups throws (UltiBackup#29)")
+        void pruneFailureDoesNotLoseTheNewBackup() throws Exception {
+            org.bukkit.plugin.Plugin bukkitPlugin = mock(org.bukkit.plugin.Plugin.class);
+            when(bukkitPlugin.getDataFolder()).thenReturn(tempDir.toFile());
+            UltiBackupTestHelper.setField(service, "bukkitPlugin", bukkitPlugin);
+            when(config.getMaxBackupsPerPlayer()).thenReturn(1);
+
+            BackupMetadata old = BackupMetadata.builder().playerUuid(playerUuid.toString()).backupTime(1L).build();
+            old.setId("old-0");
+            BackupMetadata older = BackupMetadata.builder().playerUuid(playerUuid.toString()).backupTime(0L).build();
+            older.setId("old-1");
+            when(dataOperator.getById("old-1")).thenReturn(older);
+            doThrow(new IllegalStateException("database down")).when(dataOperator).delById("old-1");
+            Query<BackupMetadata> query = mock(Query.class);
+            when(dataOperator.query()).thenReturn(query);
+            when(query.where("player_uuid")).thenReturn(query);
+            when(query.eq(anyString())).thenReturn(query);
+            when(query.list()).thenReturn(new ArrayList<>(Arrays.asList(old, older)));
+
+            BackupMetadata result = service.createBackup(player, "MANUAL");
+
+            assertThat(result).as("the backup itself was saved; a failed prune must not report it as failed").isNotNull();
+        }
+
         @Test
         @DisplayName("Should trigger cleanup of old backups")
         void triggersCleanup() throws Exception {
@@ -688,6 +820,7 @@ class BackupServiceTest {
                         .backupTime(1000L + i)
                         .build();
                 m.setId("old-" + i);
+                when(dataOperator.getById("old-" + i)).thenReturn(m);
                 existingBackups.add(m);
             }
             // Sort descending like getBackups would

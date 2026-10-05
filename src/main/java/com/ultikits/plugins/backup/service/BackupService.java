@@ -115,28 +115,88 @@ public class BackupService {
      */
     public BackupMetadata write(PendingBackup pending) {
         BackupMetadata metadata = pending.metadata;
+        File backupFile = new File(bukkitPlugin.getDataFolder(), metadata.getFilePath());
         try {
             // Save cold data to file
-            File backupFile = new File(bukkitPlugin.getDataFolder(), metadata.getFilePath());
             String checksum = pending.content.saveToFile(backupFile);
             metadata.setChecksum(checksum);
-            
-            // Save metadata to database
-            dataOperator.insert(metadata);
-            
-            // Clean up old backups
-            cleanupOldBackups(pending.playerUuid);
-            
-            plugin.getLogger().info(plugin.i18n("backup.log.created")
-                .replace("{PLAYER}", pending.playerName)
-                .replace("{FILE}", metadata.getFilePath()));
-            
-            return metadata;
         } catch (IOException e) {
             plugin.getLogger().error(e, plugin.i18n("backup.log.create_failed")
                 .replace("{PLAYER}", pending.playerName));
             return null;
         }
+
+        try {
+            // Save metadata to database
+            dataOperator.insert(metadata);
+        } catch (RuntimeException e) {
+            // An error does not prove nothing was committed (a connection lost after the commit), so the
+            // file is removed only once the row is confirmed absent (UltiBackup#29)
+            Boolean stored = rowExistsFor(metadata);
+            if (stored == null) {
+                plugin.getLogger().error(e, plugin.i18n("backup.log.insert_unconfirmed")
+                    .replace("{PLAYER}", pending.playerName)
+                    .replace("{FILE}", metadata.getFilePath()));
+                return null;
+            }
+            if (!stored) {
+                removeOrphanFile(backupFile, metadata);
+                plugin.getLogger().error(e, plugin.i18n("backup.log.create_failed")
+                    .replace("{PLAYER}", pending.playerName));
+                return null;
+            }
+            plugin.getLogger().warn(e, plugin.i18n("backup.log.insert_error_but_stored")
+                .replace("{PLAYER}", pending.playerName)
+                .replace("{FILE}", metadata.getFilePath()));
+        }
+
+        // Clean up old backups; the new backup is saved, so a failed prune must not report it as failed
+        try {
+            cleanupOldBackups(pending.playerUuid);
+        } catch (RuntimeException e) {
+            plugin.getLogger().warn(e, plugin.i18n("backup.log.cleanup_failed")
+                .replace("{PLAYER}", pending.playerName));
+        }
+
+        plugin.getLogger().info(plugin.i18n("backup.log.created")
+            .replace("{PLAYER}", pending.playerName)
+            .replace("{FILE}", metadata.getFilePath()));
+
+        return metadata;
+    }
+
+    /**
+     * Whether a row for this backup's file is stored.
+     * <p>
+     * 该备份文件对应的数据库记录是否已存在。
+     *
+     * @return true if a row exists, false if none does, null if the lookup itself failed
+     */
+    private Boolean rowExistsFor(BackupMetadata metadata) {
+        try {
+            return !dataOperator.query()
+                .where("file_path").eq(metadata.getFilePath())
+                .list().isEmpty();
+        } catch (RuntimeException lookupFailure) {
+            return null;
+        }
+    }
+
+    /**
+     * Deletes a backup file that has no database row, logging its path if it cannot be deleted.
+     * <p>
+     * 删除没有数据库记录的备份文件；删除失败时在日志中写出路径。
+     */
+    private void removeOrphanFile(File backupFile, BackupMetadata metadata) {
+        if (backupFile.exists() && !backupFile.delete()) {
+            warnFileNotDeleted(metadata, backupFile);
+        }
+    }
+
+    private void warnFileNotDeleted(BackupMetadata metadata, File file) {
+        plugin.getLogger().warn(plugin.i18n("backup.log.file_delete_failed")
+            .replace("{ID}", metadata.getId() != null ? String.valueOf(metadata.getId()) : file.getName())
+            .replace("{FILE}", file.getPath()));
     }
 
     /**
@@ -370,19 +430,27 @@ public class BackupService {
      * 删除备份。
      *
      * @param metadata the backup metadata
-     * @return true if deleted successfully
+     * @return true if its database row was deleted; false if it had no row (already deleted)
      */
     public boolean deleteBackup(BackupMetadata metadata) {
-        if (metadata == null) {
+        if (metadata == null || metadata.getId() == null) {
             return false;
         }
-        
-        // Trigger onDelete hook which will delete the cold data file
-        metadata.onDelete();
-        
-        // Delete metadata from database
+
+        // A row that is already gone was not deleted by this call (UltiBackup#29)
+        if (dataOperator.getById(metadata.getId()) == null) {
+            return false;
+        }
+
+        // Row first: if this throws, the file is still there for the row that remains
         dataOperator.delById(metadata.getId());
-        
+
+        // Then the cold data file; a failure leaves a file without a row, so name it
+        File file = metadata.getBackupFile();
+        if (!metadata.deleteBackupFile() && file != null) {
+            warnFileNotDeleted(metadata, file);
+        }
+
         return true;
     }
     

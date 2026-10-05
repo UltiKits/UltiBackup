@@ -222,8 +222,12 @@ public class BackupListener implements Listener {
     private void handleDelete(Player player, BackupMetadata backup, BackupGUI gui) {
         if (player.hasPermission("ultibackup.delete") || 
             player.hasPermission("ultibackup.admin")) {
-            backupService.deleteBackup(backup);
-            player.sendMessage(i18n("backup.message.deleted"));
+            if (backupService.deleteBackup(backup)) {
+                player.sendMessage(i18n("backup.message.deleted"));
+            } else {
+                // The row was already gone (another admin, a stale menu): nothing was deleted here
+                player.sendMessage(i18n("backup.message.not_found"));
+            }
             gui.refresh();
         } else {
             player.sendMessage(i18n("backup.message.no_permission"));

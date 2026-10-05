@@ -368,12 +368,32 @@ class BackupListenerTest {
             when(gui.getBackupAtSlot(5)).thenReturn(backup);
 
             when(player.hasPermission("ultibackup.delete")).thenReturn(true);
+            when(backupService.deleteBackup(backup)).thenReturn(true);
 
             InventoryClickEvent event = createRightClickEventForHolder(gui, player, 5);
             listener.onBackupGUIClick(event);
 
             verify(backupService).deleteBackup(backup);
             verify(player).sendMessage("backup.message.deleted");
+            verify(gui).refresh();
+        }
+
+        @Test
+        @DisplayName("Should tell the player the backup was not found, not deleted, when the service reports failure (UltiBackup#29)")
+        void rightClickDeleteOfAGoneBackup() {
+            BackupGUI gui = mock(BackupGUI.class);
+            BackupMetadata backup = BackupMetadata.builder().build();
+            backup.setId("gone-id");
+            when(gui.getBackupAtSlot(5)).thenReturn(backup);
+
+            when(player.hasPermission("ultibackup.delete")).thenReturn(true);
+            when(backupService.deleteBackup(backup)).thenReturn(false);
+
+            InventoryClickEvent event = createRightClickEventForHolder(gui, player, 5);
+            listener.onBackupGUIClick(event);
+
+            verify(player).sendMessage("backup.message.not_found");
+            verify(player, never()).sendMessage("backup.message.deleted");
             verify(gui).refresh();
         }
 
@@ -651,6 +671,7 @@ class BackupListenerTest {
 
             when(player.hasPermission("ultibackup.delete")).thenReturn(false);
             when(player.hasPermission("ultibackup.admin")).thenReturn(true);
+            when(backupService.deleteBackup(backup)).thenReturn(true);
 
             InventoryClickEvent event = createRightClickEventForHolder(gui, player, 5);
             listener.onBackupGUIClick(event);
