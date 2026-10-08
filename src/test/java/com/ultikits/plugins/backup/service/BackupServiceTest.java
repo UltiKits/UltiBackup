@@ -12,6 +12,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 
@@ -1099,99 +1101,182 @@ class BackupServiceTest {
         }
     }
 
-    // ==================== UltiKits/UltiBackup#24 ====================
+    // ==================== auto_backup.interval_seconds (UltiKits/UltiBackup#24 follow-up) ====================
 
+    /**
+     * Automatic backups run on the framework's config-bound {@code @Scheduled}, bound to the seconds-valued
+     * {@code auto_backup.interval_seconds}. The minutes key {@code auto_backup.interval} is no longer read by
+     * the schedule: binding it would have turned an existing {@code interval: 30} into a backup every 30
+     * seconds, so it only produces a load-time warning when it holds a value other than its default.
+     * <p>
+     * The scheduled method is found by its annotation, not by name, so a missing binding fails on an
+     * assertion rather than on a compile error.
+     */
     @Nested
-    @DisplayName("automatic backups follow auto_backup.interval, in minutes (UltiKits/UltiBackup#24)")
-    class AutoBackupInterval {
+    @DisplayName("automatic backups are bound to auto_backup.interval_seconds")
+    class BoundAutoBackup {
 
-        private BackupService spyService;
-        private java.lang.reflect.Method tick;
+        private static final String SECONDS_KEY = "auto_backup.interval_seconds";
+        private static final String LEGACY_KEY = "auto_backup.interval";
 
-        @BeforeEach
-        void minuteTick() throws Exception {
-            spyService = spy(service);
-            doNothing().when(spyService).autoBackupAll();
-            // Reached reflectively: without the fix the one-minute tick does not exist
-            tick = BackupService.class.getMethod("autoBackupTick");
+        /** The methods of {@link BackupService} carrying {@code @Scheduled}, declared on the class itself. */
+        private List<java.lang.reflect.Method> scheduledMethods() {
+            List<java.lang.reflect.Method> found = new ArrayList<>();
+            for (java.lang.reflect.Method m : BackupService.class.getDeclaredMethods()) {
+                if (m.isAnnotationPresent(Scheduled.class)) {
+                    found.add(m);
+                }
+            }
+            return found;
         }
 
-        private void ticks(int minutes) throws Exception {
-            for (int i = 0; i < minutes; i++) {
-                tick.invoke(spyService);
+        private java.lang.reflect.Method scheduledMethod() {
+            List<java.lang.reflect.Method> found = scheduledMethods();
+            assertThat(found).as("exactly one @Scheduled method on BackupService").hasSize(1);
+            return found.get(0);
+        }
+
+        @Test
+        @DisplayName("one void, sync method is bound to the seconds key for both its period and its first delay")
+        void boundToTheSecondsKey() {
+            java.lang.reflect.Method m = scheduledMethod();
+            Scheduled s = m.getAnnotation(Scheduled.class);
+
+            assertThat(m.getReturnType()).isEqualTo(void.class);
+            assertThat(m.getParameterCount()).isZero();
+            assertThat(s.config()).isEqualTo(BackupConfig.class);
+            assertThat(s.periodKey()).isEqualTo(SECONDS_KEY);
+            // The same key as the first delay: the first automatic backup comes one interval after start
+            assertThat(s.delayKey()).isEqualTo(SECONDS_KEY);
+            assertThat(s.async()).isFalse();
+            // The literals a binding replaces stay unset (setting both refuses the module at load)
+            assertThat(s.period()).isEqualTo(-1L);
+            assertThat(s.delay()).isZero();
+        }
+
+        @Test
+        @DisplayName("the minute counter is gone: no autoBackupTick method and no minute-counting field")
+        void minuteCounterRemoved() {
+            List<String> methods = new ArrayList<>();
+            for (java.lang.reflect.Method m : BackupService.class.getDeclaredMethods()) {
+                methods.add(m.getName());
+            }
+            List<String> fields = new ArrayList<>();
+            for (java.lang.reflect.Field f : BackupService.class.getDeclaredFields()) {
+                fields.add(f.getName());
+            }
+
+            assertThat(methods).doesNotContain("autoBackupTick");
+            assertThat(fields).noneMatch(name -> name.toLowerCase(Locale.ROOT).contains("minute"));
+        }
+
+        @Test
+        @DisplayName("disabled: the scheduled run creates no backup")
+        void disabledCreatesNoBackup() throws Exception {
+            java.lang.reflect.Method m = scheduledMethod();
+            when(config.isAutoBackupEnabled()).thenReturn(false);
+            BackupService spyService = spy(service);
+
+            try (MockedStatic<Bukkit> bukkitMock = mockStatic(Bukkit.class)) {
+                bukkitMock.when(Bukkit::getOnlinePlayers).thenReturn(Collections.singletonList(player));
+                m.invoke(spyService);
+            }
+
+            verify(spyService, never()).autoBackupAll();
+            verify(spyService, never()).createBackup(any(), anyString());
+        }
+
+        @Test
+        @DisplayName("enabled: each scheduled run backs up once, and the legacy minutes value is never read")
+        void enabledRunsOnceAndIgnoresLegacyValue() throws Exception {
+            java.lang.reflect.Method m = scheduledMethod();
+            when(config.isAutoBackupEnabled()).thenReturn(true);
+            BackupService spyService = spy(service);
+            doNothing().when(spyService).autoBackupAll();
+
+            m.invoke(spyService);
+
+            verify(spyService, times(1)).autoBackupAll();
+            verify(config, never()).getAutoBackupInterval();
+        }
+
+        @Test
+        @DisplayName("autoBackupAll itself is not scheduled; the old fixed and minute schedules are gone")
+        void onlyTheBoundMethodIsScheduled() throws Exception {
+            assertThat(BackupService.class.getMethod("autoBackupAll").getAnnotation(Scheduled.class)).isNull();
+            for (java.lang.reflect.Method m : scheduledMethods()) {
+                Scheduled s = m.getAnnotation(Scheduled.class);
+                assertThat(s.periodKey()).as(m.getName()).isNotEqualTo(LEGACY_KEY);
+                assertThat(s.delayKey()).as(m.getName()).isNotEqualTo(LEGACY_KEY);
+            }
+        }
+
+        // ---------- load-time warning for the legacy minutes key ----------
+
+        private void runInit(BackupService target) throws Exception {
+            File dataFolder = tempDir.resolve("legacy_init").toFile();
+            dataFolder.mkdirs();
+            org.bukkit.plugin.Plugin bukkitPlugin = mock(org.bukkit.plugin.Plugin.class);
+            when(bukkitPlugin.getDataFolder()).thenReturn(dataFolder);
+            org.bukkit.plugin.PluginManager pm = mock(org.bukkit.plugin.PluginManager.class);
+            when(pm.getPlugin("UltiTools")).thenReturn(bukkitPlugin);
+            try (MockedStatic<Bukkit> bukkitMock = mockStatic(Bukkit.class)) {
+                bukkitMock.when(Bukkit::getPluginManager).thenReturn(pm);
+                target.init();
             }
         }
 
         @Test
-        @DisplayName("interval 5: a backup after the fifth minute and the tenth, none before")
-        void everyFiveMinutes() throws Exception {
-            when(config.isAutoBackupEnabled()).thenReturn(true);
-            when(config.getAutoBackupInterval()).thenReturn(5);
-
-            ticks(4);
-            verify(spyService, never()).autoBackupAll();
-            ticks(1);
-            verify(spyService, times(1)).autoBackupAll();
-            ticks(5);
-            verify(spyService, times(2)).autoBackupAll();
-        }
-
-        @Test
-        @DisplayName("interval 120: nothing after 30 minutes, the shipped cadence")
-        void twoHoursIsNotThirtyMinutes() throws Exception {
-            when(config.isAutoBackupEnabled()).thenReturn(true);
-            when(config.getAutoBackupInterval()).thenReturn(120);
-
-            ticks(119);
-            verify(spyService, never()).autoBackupAll();
-            ticks(1);
-            verify(spyService, times(1)).autoBackupAll();
-        }
-
-        @Test
-        @DisplayName("a value changed by a reload applies at the next minute")
-        void changedValueApplies() throws Exception {
-            when(config.isAutoBackupEnabled()).thenReturn(true);
+        @DisplayName("legacy value 30 (its default): no warning at load")
+        void legacyDefaultNoWarning() throws Exception {
             when(config.getAutoBackupInterval()).thenReturn(30);
-            ticks(10);
-            when(config.getAutoBackupInterval()).thenReturn(10);
 
-            ticks(1);
+            runInit(service);
 
-            verify(spyService, times(1)).autoBackupAll();
+            verify(UltiBackupTestHelper.getMockLogger(), never()).warn(anyString());
         }
 
         @Test
-        @DisplayName("disabled: no backup however long it waits")
-        void disabledNeverBacksUp() throws Exception {
-            when(config.isAutoBackupEnabled()).thenReturn(false);
-            when(config.getAutoBackupInterval()).thenReturn(1);
+        @DisplayName("legacy value 60: exactly one warning at load, and the config is not written")
+        void legacyNonDefaultWarnsOnce() throws Exception {
+            when(config.getAutoBackupInterval()).thenReturn(60);
 
-            ticks(3);
+            runInit(service);
 
-            verify(spyService, never()).autoBackupAll();
+            verify(UltiBackupTestHelper.getMockLogger(), times(1)).warn(anyString());
+            verify(config, never()).save();
+            verify(config, never()).setAutoBackupInterval(anyInt());
         }
 
-        @Test
-        @DisplayName("the tick runs every minute on the main thread; the old fixed 30-minute schedule is gone")
-        void schedule() throws Exception {
-            Scheduled onTick = tick.getAnnotation(Scheduled.class);
-            assertThat(onTick).isNotNull();
-            assertThat(onTick.period()).isEqualTo(1200L);
-            assertThat(onTick.async()).isFalse();
-            assertThat(BackupService.class.getMethod("autoBackupAll").getAnnotation(Scheduled.class)).isNull();
+        @ParameterizedTest(name = "{0}")
+        @ValueSource(strings = {"en", "zh"})
+        @DisplayName("legacy value 60: the warning, as the server's language renders it, names the seconds key")
+        void legacyWarningNamesTheSecondsKey(String code) throws Exception {
+            Map<String, String> catalogue = loadCatalogue(code);
+            com.ultikits.ultitools.entities.Language language = new com.ultikits.ultitools.entities.Language(catalogue);
+            when(UltiBackupTestHelper.getMockPlugin().i18n(anyString()))
+                    .thenAnswer(inv -> language.getLocalizedText(inv.getArgument(0)));
+            when(config.getAutoBackupInterval()).thenReturn(60);
+
+            runInit(service);
+
+            ArgumentCaptor<String> line = ArgumentCaptor.forClass(String.class);
+            verify(UltiBackupTestHelper.getMockLogger(), times(1)).warn(line.capture());
+            assertThat(line.getValue()).contains(SECONDS_KEY).contains(LEGACY_KEY).contains("60");
         }
 
-        /**
-         * The framework runs a scheduled method first after its {@code delay} (0 unless set), so a
-         * tick at registration would count a minute that has not passed: interval 1 would back up at
-         * once and interval N after N-1 minutes (third-party review, round 1).
-         */
-        @Test
-        @DisplayName("the first tick comes one minute after start, so the first backup comes a whole interval after it")
-        void firstTickAfterOneMinute() throws Exception {
-            Scheduled onTick = tick.getAnnotation(Scheduled.class);
-            assertThat(onTick.delay()).isEqualTo(onTick.period()).isEqualTo(1200L);
+        @SuppressWarnings("unchecked")
+        private Map<String, String> loadCatalogue(String code) throws IOException {
+            Map<String, String> out = new HashMap<>();
+            try (java.io.InputStream in = BackupService.class.getClassLoader()
+                    .getResourceAsStream("lang/" + code + ".yml")) {
+                assertThat(in).as("lang/" + code + ".yml on the classpath").isNotNull();
+                Map<String, Object> raw = new org.yaml.snakeyaml.Yaml().load(in);
+                for (Map.Entry<String, Object> e : raw.entrySet()) {
+                    out.put(e.getKey(), String.valueOf(e.getValue()));
+                }
+            }
+            return out;
         }
     }
 }
