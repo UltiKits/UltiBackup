@@ -1248,6 +1248,44 @@ class BackupServiceTest {
             verify(config, never()).setAutoBackupInterval(anyInt());
         }
 
+        /**
+         * The legacy key is checked again after every successful {@code /ul reload}: an operator who edits the
+         * old minutes key and reloads gets the warning at once, not only at the next restart (gate-1 review F1).
+         * The framework notifies a config's change listeners only after a reload that loaded and validated.
+         */
+        private com.ultikits.ultitools.interfaces.ConfigChangeListener registeredReloadListener() {
+            ArgumentCaptor<com.ultikits.ultitools.interfaces.ConfigChangeListener> listener =
+                    ArgumentCaptor.forClass(com.ultikits.ultitools.interfaces.ConfigChangeListener.class);
+            verify(config).addChangeListener(listener.capture());
+            return listener.getValue();
+        }
+
+        @Test
+        @DisplayName("reload: the legacy key edited to 60 and reloaded draws exactly one warning, without a restart")
+        void reloadWithLegacyNonDefaultWarnsOnce() throws Exception {
+            when(config.getAutoBackupInterval()).thenReturn(30);
+            runInit(service);
+            verify(UltiBackupTestHelper.getMockLogger(), never()).warn(anyString());
+
+            when(config.getAutoBackupInterval()).thenReturn(60);
+            registeredReloadListener().onConfigReload(config);
+
+            verify(UltiBackupTestHelper.getMockLogger(), times(1)).warn(anyString());
+            verify(config, never()).save();
+            verify(config, never()).setAutoBackupInterval(anyInt());
+        }
+
+        @Test
+        @DisplayName("reload: the legacy key at its default 30 draws no warning")
+        void reloadWithLegacyDefaultNoWarning() throws Exception {
+            when(config.getAutoBackupInterval()).thenReturn(30);
+            runInit(service);
+
+            registeredReloadListener().onConfigReload(config);
+
+            verify(UltiBackupTestHelper.getMockLogger(), never()).warn(anyString());
+        }
+
         @ParameterizedTest(name = "{0}")
         @ValueSource(strings = {"en", "zh"})
         @DisplayName("legacy value 60: the warning, as the server's language renders it, names the seconds key")
