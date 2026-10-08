@@ -104,3 +104,4 @@ backup.log.file_delete_failed: "Backup {ID} has no database row, but its file co
 backup.log.cleanup_failed: "Pruning old backups for {PLAYER} failed; the new backup was saved"
 backup.log.insert_unconfirmed: "Saving a backup for {PLAYER} failed with a database error and whether its row was written could not be checked; the backup file was kept: {FILE}"
 backup.log.insert_error_but_stored: "Saving a backup for {PLAYER} reported a database error, but its row was written; the backup was kept: {FILE}"
+backup.log.legacy_interval_ignored: "auto_backup.interval in config/backup.yml is {VALUE} (minutes), but that key no longer takes effect: automatic backups follow auto_backup.interval_seconds (seconds, default 1800). The file was not changed; set auto_backup.interval_seconds to choose the interval."

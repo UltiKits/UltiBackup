@@ -105,3 +105,4 @@ backup.log.file_delete_failed: "备份 {ID} 没有数据库记录，但其文件
 backup.log.cleanup_failed: "为 {PLAYER} 清理旧备份失败；新备份已保存"
 backup.log.insert_unconfirmed: "为 {PLAYER} 保存备份时数据库出错，且无法确认其记录是否已写入；已保留备份文件：{FILE}"
 backup.log.insert_error_but_stored: "为 {PLAYER} 保存备份时数据库报错，但其记录已写入；备份已保留：{FILE}"
+backup.log.legacy_interval_ignored: "config/backup.yml 中的 auto_backup.interval 为 {VALUE}（分钟），但该键已不再生效：自动备份按 auto_backup.interval_seconds（秒，默认 1800）执行。文件未被修改；请设置 auto_backup.interval_seconds 来选择间隔。"
