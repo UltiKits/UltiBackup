@@ -101,11 +101,11 @@ find <repo-root>/src/main/java -path '*/gui/*' -name '*.java' -not -path '*/targ
 
 **Positive control:** the line-start form returns `@CmdExecutor` = 1, `@CmdMapping` = 9,
 `@EventListener` = 1 (class), `@EventHandler` = 4 (handler methods), `@Scheduled` = 1,
-`@ConditionalOnConfig` = 0, `@ConfigEntity` = 1, `@ConfigEntry` = 8, `@Table` = 1 — confirmed by
+`@ConditionalOnConfig` = 0, `@ConfigEntity` = 1, `@ConfigEntry` = 9, `@Table` = 1 — confirmed by
 reading `BackupCommand.java` directly (9 `@CmdMapping` sites at lines 51, 62, 90, 112, 131, 152,
 171, 196, 228: `` (bare), `list`, `create`, `restore <number>`, `restore <number> force`,
-`saveall`, `admin <player>`, `admin create <player>`, `help`) and `BackupConfig.java` (8
-`@ConfigEntry` sites at lines 24, 28, 31, 34, 38, 41, 44, 47). The `find`-based GUI-class count
+`saveall`, `admin <player>`, `admin create <player>`, `help`) and `BackupConfig.java` (9
+`@ConfigEntry` sites at lines 24, 41, 60, 65, 68, 72, 75, 78, 81). The `find`-based GUI-class count
 above returns 3, matching the module's independently-derived list of GUI classes excluded
 from the coverage gate (`BackupGUI`, `BackupPreviewGUI`, `ForceRestoreConfirmPage`),
 confirmed by reading all three files directly. This document's command-row count matches the
@@ -193,7 +193,7 @@ the defect, not this behaviour).
 
 | ID | Feature | Kind | How to reach | Permission | Target | Tier | Manual | Source |
 |---|---|---|---|---|---|---|---|---|
-| ultibackup.task.auto-backup-all | Automatically create a backup (reason `AUTO`) for every online player who holds `ultibackup.auto`, every `auto_backup.interval` minutes (default 30), provided `auto_backup.enabled` is true; the first automatic backup comes one interval after the module starts (`UltiKits/UltiBackup#24`) | scheduled | a one-minute tick (1200 ticks) counts toward `auto_backup.interval` while the server is up and `auto_backup.enabled: true` | n/a | n/a | internal | brief | BackupService#autoBackupTick, BackupService#autoBackupAll |
+| ultibackup.task.auto-backup-all | Automatically create a backup (reason `AUTO`) for every online player who holds `ultibackup.auto`, every `auto_backup.interval_seconds` seconds (default 1800, the old 30 minutes), provided `auto_backup.enabled` is true at that run; the first automatic backup comes one interval after the module loads, not at load. `/ul reload` applies a changed interval keeping the task's place in its cycle (never earlier, never postponed); an out-of-range value at reload is refused by the framework, which keeps the running interval and reports the reload as partial. The old minutes key `auto_backup.interval` no longer drives it (UltiTools 6.3.0 release preparation; before, a one-minute tick counted toward that key, `UltiKits/UltiBackup#24`) | scheduled | the framework's config-bound `@Scheduled` on `BackupService#autoBackupIfEnabled` (period and first delay both `auto_backup.interval_seconds`, sync), while the server is up | n/a | n/a | internal | brief | BackupService#autoBackupIfEnabled, BackupService#autoBackupAll |
 
 ## Data Persistence
 
@@ -203,8 +203,8 @@ the defect, not this behaviour).
 
 ## Configuration
 
-Every `@ConfigEntry`-annotated field on this module's one `@ConfigEntity` class (8 keys total,
-matching the reconciliation table's own `@ConfigEntry` count of 8 exactly). This module ships NO
+Every `@ConfigEntry`-annotated field on this module's one `@ConfigEntity` class (9 keys total,
+matching the reconciliation table's own `@ConfigEntry` count of 9 exactly). This module ships NO
 `config/backup.yml` resource under `src/main/resources` — unlike the framework's own migrated
 keys or UltiChat's five shipped config files, `BackupConfig`'s file is generated entirely from
 these `@ConfigEntry` field defaults the first time the module boots, with no packaged seed
@@ -219,8 +219,9 @@ one place a reader might expect the reason label to be config-adjacent and find 
 
 | ID | Feature | Kind | How to reach | Permission | Target | Tier | Manual | Source |
 |---|---|---|---|---|---|---|---|---|
-| ultibackup.config.backup.auto_backup.enabled | Enable the automatic backup (every `auto_backup.interval` minutes) for online players holding `ultibackup.auto`; while it is off, no minute counts toward the interval | config | `config/backup.yml: auto_backup.enabled (default: true)` | n/a | n/a | admin | brief | BackupService#autoBackupAll |
-| ultibackup.config.backup.auto_backup.interval | The automatic backup interval in minutes (range 1-1440, enforced by `@Range`): a one-minute tick counts toward it and runs the automatic backup each time that many minutes have passed; a value changed by `/ul reload` or the panel applies at the next minute (fixed, `UltiKits/UltiBackup#24`: the key used to be read by nothing, and the backup ran on a fixed 36000-tick schedule, every 30 minutes whatever the file said) | config | `config/backup.yml: auto_backup.interval (default: 30)` | n/a | n/a | admin | brief | BackupService#autoBackupTick |
+| ultibackup.config.backup.auto_backup.enabled | Enable the automatic backup (every `auto_backup.interval_seconds` seconds) for online players holding `ultibackup.auto`; read at each scheduled run, so a change applies at the next run, and while it is off each scheduled run does nothing | config | `config/backup.yml: auto_backup.enabled (default: true)` | n/a | n/a | admin | brief | BackupService#autoBackupIfEnabled, BackupService#autoBackupAll |
+| ultibackup.config.backup.auto_backup.interval_seconds | Seconds between automatic backups, and before the first one after the module loads (default 1800, the 30 minutes the old minutes key defaulted to). Range 1 to 107374182, enforced by the framework's binding, not by `@Range`: an invalid value (`0` does not mean off) refuses the module at load; at `/ul reload` it is ignored with a WARNING naming the key, the running interval is kept and the reload is reported as partial; a panel edit outside the range is refused. A valid change applies at `/ul reload`, keeping the task's place in its cycle. A file written before this key existed lacks it: the framework inserts it with its default at load, and the module itself never writes the file | config | `config/backup.yml: auto_backup.interval_seconds (default: 1800)` | n/a | n/a | admin | brief | BackupService#autoBackupIfEnabled |
+| ultibackup.config.backup.auto_backup.interval | Deprecated, no longer used: the old automatic-backup interval in minutes (range 1-1440, enforced by `@Range`). Nothing schedules from it — the framework's binding reads seconds, so binding this key would have turned an existing `interval: 30` into a backup every 30 seconds. It stays declared with its default, is never rewritten and is never converted into `auto_backup.interval_seconds`; when it holds a value other than 30, the module logs one WARNING at load, in the server's language, naming `auto_backup.interval_seconds` (`backup.log.legacy_interval_ignored`). History: read by nothing before `UltiKits/UltiBackup#24`, then counted by a one-minute tick until UltiTools 6.3.0 release preparation | config | `config/backup.yml: auto_backup.interval (default: 30)` | n/a | n/a | admin | brief | BackupService#init |
 | ultibackup.config.backup.auto_backup.on_death | Enable auto-backup on player death (reason `DEATH`) | config | `config/backup.yml: auto_backup.on_death (default: true)` | n/a | n/a | admin | brief | BackupListener#onPlayerDeath |
 | ultibackup.config.backup.auto_backup.on_quit | Enable auto-backup on player quit (reason `QUIT`) | config | `config/backup.yml: auto_backup.on_quit (default: true)` | n/a | n/a | admin | brief | BackupListener#onPlayerQuit |
 | ultibackup.config.backup.backup_armor | Include the player's worn armor and off-hand item in a created backup's content, and restore them. A restore replaces the armor and off-hand only when this is `true` and the backup holds an armor part (it was taken with `true`); otherwise it replaces only the 36 storage slots and leaves the armor and off-hand the player is wearing as they are (`UltiKits/UltiBackup#25`; before, the restore cleared them and put nothing back) | config | `config/backup.yml: backup_armor (default: true)` | n/a | n/a | admin | brief | BackupContent#fromPlayer, BackupContent#restoreToPlayer |
