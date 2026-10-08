@@ -25,14 +25,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Language guard 2: no Chinese text in a {@code src/main/java} literal unless it is a catalogue key
  * or listed, with a written reason, in {@code src/test/resources/i18n/cjk-literal-exemptions.tsv}.
  * <p>
- * Detection contract, the same as the framework's {@code .github/scripts/check-cjk-scope.sh}: a
- * code point in the Han script ({@code Character.UnicodeScript.HAN}: the CJK Unified Ideographs
- * block, its extensions, the supplementary ideograph planes, the compatibility ideographs and the
- * radicals), in CJK Symbols and Punctuation (U+3000-U+303F), or in Halfwidth and Fullwidth Forms
- * (U+FF00-U+FFEF). Kana (U+3040-U+30FF) is outside it. Unlike that script, this guard is about
- * literals, not comments: comments never count, and every string, character and text-block literal
- * counts after its Unicode and escape sequences are decoded. The literals come from {@code javac}'s
- * own syntax tree ({@link I18nSourceScanner}), not from a pattern match.
+ * Detection contract: this guard and the framework's {@code .github/scripts/check-cjk-scope.sh} detect the
+ * same character properties: the Han script ({@code Character.UnicodeScript.HAN}), CJK Symbols and
+ * Punctuation (U+3000-U+303F) and Halfwidth and Fullwidth Forms (U+FF00-U+FFEF); kana (U+3040-U+30FF) is
+ * out. The Unicode version each one knows follows its toolchain -- the JDK here, PCRE2 on the CI runner --
+ * so a character added in a newer Unicode version can be matched by one and not yet by the other. Unlike
+ * that script, this guard is about literals, not comments: comments never count, and every string,
+ * character and text-block literal counts after its Unicode and escape sequences are decoded. The literals
+ * come from {@code javac}'s own syntax tree ({@link I18nSourceScanner}), not from a pattern match.
  * <p>
  * Exemption file format: one line per literal, {@code path<TAB>exact literal<TAB>reason}. The path
  * is relative to the module root; the literal is the text between the quotes exactly as written in
@@ -406,7 +406,7 @@ class UltiBackupCjkLiteralScopeTest {
     }
 
     @Nested
-    @DisplayName("the detection contract: the framework's check-cjk-scope.sh, character for character")
+    @DisplayName("the detection contract: the same character properties as the framework's check-cjk-scope.sh")
     class DetectionContract {
 
         @Test
