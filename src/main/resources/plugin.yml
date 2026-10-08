@@ -4,5 +4,6 @@ main: com.ultikits.plugins.backup.UltiBackup
 authors:
   - wisdommen
   - UltiKits Team
-api-version: 621
+api-version: 630
+identify-string: ultibackup
 loadAfter: []

@@ -1,8 +1,9 @@
 # UltiBackup
 
 [![UltiTools Module](https://img.shields.io/badge/UltiTools-Module-blue)](https://github.com/UltiKits/UltiTools-Reborn)
-[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.13--1.21-green)](https://www.spigotmc.org/)
-[![Java](https://img.shields.io/badge/Java-8+-orange)](https://www.oracle.com/java/)
+[![UltiTools-API](https://img.shields.io/badge/UltiTools--API-6.3.0%2B-blue)](https://github.com/UltiKits/UltiTools-Reborn)
+[![Paper](https://img.shields.io/badge/Paper-1.21%2B-green)](https://papermc.io/)
+[![Java](https://img.shields.io/badge/Java-21%2B-orange)](https://adoptium.net/)
 
 **UltiBackup** 是 UltiTools-API 框架的一个插件模块，为 Minecraft 服务器提供玩家背包备份与恢复功能。支持自动备份、手动备份、GUI 管理和数据完整性校验。
 
@@ -17,7 +18,7 @@
 
 ### 自动备份
 
-- ⏱️ **定时备份** - 可配置的自动备份间隔（默认 30 分钟）
+- ⏱️ **定时备份** - 可配置的自动备份间隔（`auto_backup.interval_seconds`，单位秒，默认 1800 秒即 30 分钟）
 - 💀 **死亡备份** - 玩家死亡时自动备份（可开关）
 - 🚪 **退出备份** - 玩家离线时自动备份（可开关）
 - 📦 **批量备份** - 管理员一键备份所有在线玩家
@@ -36,7 +37,8 @@
 ## 📦 安装
 
 ### 依赖项
-- **UltiTools-API 6.2.1+** - 核心框架
+- **UltiTools-API 6.3.0+** - 核心框架。本模块声明 `api-version: 630`，更早的框架会拒绝加载它
+- **Paper 1.21+**、**Java 21+** - 与其所依赖的 UltiTools 框架一致
 
 ### 安装步骤
 1. 确保已安装 UltiTools-API
@@ -52,7 +54,8 @@
 # 自动备份配置
 auto_backup:
   enabled: true                # 是否启用自动备份
-  interval: 30                 # 自动备份间隔（分钟）/ automatic backup interval (minutes)
+  interval_seconds: 1800       # 自动备份间隔（秒，1-107374182）/ automatic backup interval (seconds)
+  interval: 30                 # 已弃用，不再生效 / deprecated, no longer used
   on_death: true               # 玩家死亡时备份
   on_quit: true                # 玩家退出时备份
 
@@ -64,6 +67,13 @@ backup_armor: true             # 是否备份装备
 backup_enderchest: true        # 是否备份末影箱
 backup_exp: true               # 是否备份经验值
 ```
+
+> **自动备份间隔的键已更改 / The automatic-backup interval key changed.** 自动备份现在按
+> `auto_backup.interval_seconds`（秒，默认 1800）执行，并可通过 `/ul reload` 生效。旧的分钟键
+> `auto_backup.interval` 不再生效，也不会被改写或换算：若它不是默认值 30，模块会在加载时警告一次。请改用新键设置间隔。
+> Automatic backups now follow `auto_backup.interval_seconds` (seconds, default 1800), applied by `/ul reload`.
+> The old minutes key `auto_backup.interval` no longer takes effect and is never rewritten or converted; if it
+> holds anything other than its default 30, the module logs one warning at load. Set the new key instead.
 
 ## 📜 命令
 
