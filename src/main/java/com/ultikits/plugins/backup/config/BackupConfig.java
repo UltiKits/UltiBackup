@@ -46,15 +46,20 @@ public class BackupConfig extends AbstractConfigEntity {
      * binding it to the framework's seconds-valued {@code @Scheduled} would have turned an existing
      * {@code interval: 30} into a backup every 30 seconds. It stays declared, with its path, range and
      * default unchanged, so an operator's file keeps its meaning and is never rewritten; when it holds a
-     * value other than its default, {@code BackupService} logs one warning at load naming
-     * {@code auto_backup.interval_seconds}. Its value is never converted into the new key, on disk or in
-     * memory.
+     * value other than its default, {@code BackupService} logs one warning at load and one after each
+     * successful {@code /ul reload}, naming {@code auto_backup.interval_seconds}. Its value is never
+     * converted into the new key, on disk or in memory. Its {@code @Range} still applies: a value outside
+     * 1-1440 refuses the module at load and fails its reload, as in earlier versions (documented in the
+     * README's known limitations).
      * <p>
      * The comment is literal, so the framework writes it only for a file that lacks this key and keeps an
-     * existing file's comment line as it is. {@code previousComments} records the text earlier versions
-     * shipped.
+     * existing file's comment line as it is: a server upgraded from an earlier version keeps the old
+     * "minutes" comment above this key. {@code previousComments} has no effect while the comment is literal
+     * (the framework ignores it on a literal entry); it is kept so that a later switch to a catalogue token
+     * would recognise the old text as the framework's own and replace it.
      * <p>
-     * 已弃用：旧的自动备份间隔（分钟）。调度不再读取它；保留声明且不改写服务器文件，仅在其值不是默认值时于加载时警告一次。
+     * 已弃用：旧的自动备份间隔（分钟）。调度不再读取它；保留声明且不改写服务器文件，仅在其值不是默认值时于加载时及每次重载后警告。
+     * 注释为字面量，{@code previousComments} 在此不起作用。
      */
     @Range(min = 1, max = 1440)
     @ConfigEntry(path = "auto_backup.interval",

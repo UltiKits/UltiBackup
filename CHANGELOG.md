@@ -16,13 +16,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   reported as partial. The first automatic backup still comes one interval after the module starts. The old minutes
   key `auto_backup.interval` no longer takes effect; it is never rewritten or converted, because a value of `30`
   read as seconds would have meant a backup every 30 seconds. If it holds anything other than its default 30, the
-  module logs one warning at load, in the server's language, naming `auto_backup.interval_seconds`. A server's
+  module logs one warning at load and after each `/ul reload`, in the server's language, naming
+  `auto_backup.interval_seconds`. The old key is still checked against 1-1440, so a value outside that range
+  still refuses the module (see the README's known limitations). A server's
   existing file gains the new key with its default at the first start; nothing it already holds is changed.
 - 自动备份现在按新的键 `config/backup.yml` 中的 `auto_backup.interval_seconds` 执行，单位为秒（默认 1800，即与之前相同的
   30 分钟；范围 1 到 107374182）。间隔由 UltiTools 6.3.0 的配置绑定调度负责：修改后的值在 `/ul reload` 时生效，下一次备份
   不会因此提前或推迟到新间隔允许的范围之外；超出范围的值会被拒绝，保持当前运行的间隔，并将重载报告为部分完成。第一次自动备份
   仍在模块启动后一个间隔时执行。旧的分钟键 `auto_backup.interval` 不再生效，也从不被改写或换算，因为把 `30` 当作秒读取
-  将意味着每 30 秒备份一次。若它不是默认值 30，模块会在加载时按服务器语言警告一次，并指出 `auto_backup.interval_seconds`。
+  将意味着每 30 秒备份一次。若它不是默认值 30，模块会在加载时以及每次 `/ul reload` 后按服务器语言警告一次，并指出
+  `auto_backup.interval_seconds`。旧键仍按 1-1440 校验，超出范围的值仍会使模块被拒绝加载（见 README 的已知限制）。
   服务器已有的配置文件会在首次启动时加入带默认值的新键，其中已有的内容不会改变。
 
 - This version requires UltiTools 6.3.0 or later and declares `api-version: 630` in `plugin.yml` (it was `621`).

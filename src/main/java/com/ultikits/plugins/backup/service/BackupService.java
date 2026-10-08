@@ -51,10 +51,12 @@ public class BackupService {
     private static final int LEGACY_INTERVAL_DEFAULT = 30;
 
     /**
-     * Initialize the service, and warn once when the legacy minutes key {@code auto_backup.interval} holds a
-     * value other than its default: that key no longer drives automatic backups.
+     * Initialize the service, and warn when the legacy minutes key {@code auto_backup.interval} holds a value
+     * other than its default: that key no longer drives automatic backups. The check runs now and again after
+     * every successful {@code /ul reload} (a config change listener), so an operator who edits the old key and
+     * reloads is told at once rather than at the next restart.
      * <p>
-     * 初始化服务；若旧的分钟键 {@code auto_backup.interval} 不是默认值，加载时警告一次。
+     * 初始化服务；若旧的分钟键 {@code auto_backup.interval} 不是默认值，在加载时以及每次成功的 {@code /ul reload} 后警告。
      */
     @PostConstruct
     public void init() {
@@ -67,6 +69,8 @@ public class BackupService {
             backupsDirectory.mkdirs();
         }
         warnIfLegacyIntervalSet();
+        // Notified only after a reload that loaded and validated; never at init, which has already run.
+        config.addChangeListener(reloaded -> warnIfLegacyIntervalSet());
     }
 
     /**
@@ -74,10 +78,10 @@ public class BackupService {
      * other than its default 30, naming {@code auto_backup.interval_seconds}, the key automatic backups now
      * follow. Read-only: the file is never written and the legacy value is never converted into the new key,
      * because operator-written configuration is never rewritten automatically and reading a minutes value as
-     * seconds is exactly the backup storm the new key exists to avoid. Runs once per load; {@code /ul reload}
-     * does not repeat it.
+     * seconds is exactly the backup storm the new key exists to avoid. Runs once at load and once after each
+     * successful {@code /ul reload}.
      * <p>
-     * 旧的分钟键不是默认值时，按服务器语言警告一次并指出新键；只读，从不写入文件，也从不把旧值换算到新键。
+     * 旧的分钟键不是默认值时，按服务器语言警告并指出新键（加载时及每次重载后各一次）；只读，从不写入文件，也从不把旧值换算到新键。
      */
     private void warnIfLegacyIntervalSet() {
         int legacy = config.getAutoBackupInterval();
@@ -520,7 +524,7 @@ public class BackupService {
      * <p>
      * The old minutes key {@code auto_backup.interval} is not bound and not read here: the binding reads
      * seconds, so binding it would have turned an existing {@code interval: 30} into a backup every 30
-     * seconds (it only draws a load-time warning, see {@link #init()}).
+     * seconds (it only draws a warning at load and after each reload, see {@link #init()}).
      * <p>
      * 定时自动备份：间隔绑定到 {@code auto_backup.interval_seconds}（秒），首次备份在加载后一个完整间隔；
      * {@code /ul reload} 生效且不提前、不推迟。旧的分钟键不参与调度。

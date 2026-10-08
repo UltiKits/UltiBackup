@@ -70,10 +70,18 @@ backup_exp: true               # 是否备份经验值
 
 > **自动备份间隔的键已更改 / The automatic-backup interval key changed.** 自动备份现在按
 > `auto_backup.interval_seconds`（秒，默认 1800）执行，并可通过 `/ul reload` 生效。旧的分钟键
-> `auto_backup.interval` 不再生效，也不会被改写或换算：若它不是默认值 30，模块会在加载时警告一次。请改用新键设置间隔。
+> `auto_backup.interval` 不再生效，也不会被改写或换算：若它不是默认值 30，模块会在加载时以及每次 `/ul reload` 后警告一次。请改用新键设置间隔。
 > Automatic backups now follow `auto_backup.interval_seconds` (seconds, default 1800), applied by `/ul reload`.
 > The old minutes key `auto_backup.interval` no longer takes effect and is never rewritten or converted; if it
-> holds anything other than its default 30, the module logs one warning at load. Set the new key instead.
+> holds anything other than its default 30, the module logs one warning at load and after each `/ul reload`. Set the new key instead.
+
+### 已知限制 / Known limitations
+
+- 旧的分钟键 `auto_backup.interval` 虽已不再生效，仍按 1-1440 校验：超出该范围的值会使模块在启动时被拒绝加载，并使本模块的
+  `/ul reload` 失败。请保持该值在 1-1440 之间，或删除这一行（下次启动时模块会以默认值 30 重新加入它）。
+- The old minutes key `auto_backup.interval` drives nothing but is still checked against 1-1440: a value outside that
+  range refuses the module at start and makes this module's `/ul reload` fail. Keep it within 1-1440, or delete the
+  line (the module adds it back with its default 30 at the next start).
 
 ## 📜 命令
 
