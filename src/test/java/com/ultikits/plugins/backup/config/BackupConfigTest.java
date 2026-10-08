@@ -1,6 +1,11 @@
 package com.ultikits.plugins.backup.config;
 
+import com.ultikits.ultitools.annotations.ConfigEntry;
+import com.ultikits.ultitools.annotations.config.Range;
+
 import org.junit.jupiter.api.*;
+
+import java.lang.reflect.Field;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -135,6 +140,55 @@ class BackupConfigTest {
             BackupConfig config = createRealConfig();
             config.setBackupExp(false);
             assertThat(config.isBackupExp()).isFalse();
+        }
+    }
+
+    /**
+     * The automatic-backup interval moved to a new seconds-valued key bound through the framework's
+     * {@code @Scheduled}. The old minutes key stays declared, path and default unchanged, so an operator's file
+     * keeps its meaning and is never rewritten; it no longer drives anything.
+     * <p>
+     * Fields are found by their {@code @ConfigEntry} path, so a missing field fails on an assertion.
+     */
+    @Nested
+    @DisplayName("auto_backup.interval_seconds and the legacy minutes key")
+    class IntervalKeys {
+
+        private Field fieldAt(String path) {
+            for (Field f : BackupConfig.class.getDeclaredFields()) {
+                ConfigEntry entry = f.getAnnotation(ConfigEntry.class);
+                if (entry != null && entry.path().equals(path)) {
+                    f.setAccessible(true);
+                    return f;
+                }
+            }
+            return null;
+        }
+
+        @Test
+        @DisplayName("auto_backup.interval_seconds: an int defaulting to 1800 (the old 30 minutes), with no @Range")
+        @SuppressWarnings("PMD.AvoidAccessibilityAlteration")
+        void secondsKeyDeclared() throws Exception {
+            Field f = fieldAt("auto_backup.interval_seconds");
+            assertThat(f).as("a @ConfigEntry field at auto_backup.interval_seconds").isNotNull();
+            assertThat(f.getType()).isEqualTo(int.class);
+            // The binding's own range (1 to Integer.MAX_VALUE / 20 seconds) is the field's range: a module
+            // @Range would make an out-of-range reload abort the module's reload instead of keeping the
+            // running cadence
+            assertThat(f.getAnnotation(Range.class)).isNull();
+            assertThat(f.getInt(createRealConfig())).isEqualTo(1800);
+        }
+
+        @Test
+        @DisplayName("auto_backup.interval: path, default 30 and range kept; the comment names the new key; the old comment is listed")
+        @SuppressWarnings("PMD.AvoidAccessibilityAlteration")
+        void legacyKeyKept() throws Exception {
+            Field f = fieldAt("auto_backup.interval");
+            assertThat(f).as("the legacy @ConfigEntry field at auto_backup.interval").isNotNull();
+            assertThat(f.getInt(createRealConfig())).isEqualTo(30);
+            ConfigEntry entry = f.getAnnotation(ConfigEntry.class);
+            assertThat(entry.comment()).contains("auto_backup.interval_seconds");
+            assertThat(entry.previousComments()).contains("Auto backup interval in minutes (1-1440)");
         }
     }
 

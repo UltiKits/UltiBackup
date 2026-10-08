@@ -7,6 +7,45 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Automatic backups now follow a new key, `auto_backup.interval_seconds` in `config/backup.yml`, in seconds
+  (default 1800, the same 30 minutes as before; 1 to 107374182). The interval is scheduled by UltiTools 6.3.0's
+  config-bound scheduling: a changed value applies at `/ul reload` without moving the next backup earlier or later
+  than the new interval allows, and an out-of-range value is refused, keeping the running interval, with the reload
+  reported as partial. The first automatic backup still comes one interval after the module starts. The old minutes
+  key `auto_backup.interval` no longer takes effect; it is never rewritten or converted, because a value of `30`
+  read as seconds would have meant a backup every 30 seconds. If it holds anything other than its default 30, the
+  module logs one warning at load and after each `/ul reload`, in the server's language, naming
+  `auto_backup.interval_seconds`. The old key is still checked against 1-1440, so a value outside that range
+  still refuses the module (see the README's known limitations). A server's
+  existing file gains the new key with its default at the first start; nothing it already holds is changed.
+- 自动备份现在按新的键 `config/backup.yml` 中的 `auto_backup.interval_seconds` 执行，单位为秒（默认 1800，即与之前相同的
+  30 分钟；范围 1 到 107374182）。间隔由 UltiTools 6.3.0 的配置绑定调度负责：修改后的值在 `/ul reload` 时生效，下一次备份
+  不会因此提前或推迟到新间隔允许的范围之外；超出范围的值会被拒绝，保持当前运行的间隔，并将重载报告为部分完成。第一次自动备份
+  仍在模块启动后一个间隔时执行。旧的分钟键 `auto_backup.interval` 不再生效，也从不被改写或换算，因为把 `30` 当作秒读取
+  将意味着每 30 秒备份一次。若它不是默认值 30，模块会在加载时以及每次 `/ul reload` 后按服务器语言警告一次，并指出
+  `auto_backup.interval_seconds`。旧键仍按 1-1440 校验，超出范围的值仍会使模块被拒绝加载（见 README 的已知限制）。
+  服务器已有的配置文件会在首次启动时加入带默认值的新键，其中已有的内容不会改变。
+
+- This version requires UltiTools 6.3.0 or later and declares `api-version: 630` in `plugin.yml` (it was `621`).
+  The config-bound scheduling above exists only from UltiTools 6.3.0: an older framework would ignore it and run
+  the automatic backup once at load instead of on the interval, so an older framework now refuses to load the
+  module and logs a warning instead. The README's framework minimum and its server and Java badges now say
+  UltiTools 6.3.0+, Paper 1.21+ and Java 21+ (UltiKits/UltiTools-Reborn#544).
+- 本版本需要 UltiTools 6.3.0 或更高版本，并在 `plugin.yml` 中声明 `api-version: 630`（原为 `621`）。上述配置绑定调度
+  只在 UltiTools 6.3.0 及以上存在：更早的框架会忽略它，只在加载时执行一次自动备份而不是按间隔执行，因此现在更早的框架会
+  拒绝加载本模块并记录一条警告。README 中的框架最低版本以及服务端与 Java 徽章已改为 UltiTools 6.3.0+、Paper 1.21+、
+  Java 21+（UltiKits/UltiTools-Reborn#544）。
+
+- `plugin.yml` now declares `identify-string: ultibackup`, the key of this module's entry in the UltiCloud
+  catalogue. The framework's update check and `/upm update` skip a module that does not declare it, so this module
+  now takes part in both: a later published version carrying the same key is reported at startup and can be
+  installed with `/upm update` (UltiKits/UltiTools-Reborn#474).
+- `plugin.yml` 现在声明 `identify-string: ultibackup`，即本模块在 UltiCloud 模块目录中的条目键。框架的更新检查和
+  `/upm update` 会跳过未声明该键的模块，因此本模块现在会参与两者：带有同一键的更高发布版本会在启动时提示，
+  并可用 `/upm update` 安装（UltiKits/UltiTools-Reborn#474）。
+
 ### Fixed
 
 - Deleting a backup now removes its database row first and its content file after it, so a failed database
@@ -31,14 +70,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   恢复时保持玩家当前经验不变；其预览中等级显示为未备份。旧版本写出的备份文件仍可加载，并照旧恢复其中的经验
   （UltiKits/UltiBackup#27）。
 
-- `auto_backup.interval` in `config/backup.yml` now sets how often automatic backups run, in minutes as
-  documented (default 30, range 1-1440). It was read by nothing: automatic backups ran every 30 minutes
-  whatever it said. A value changed with `/ul reload` or the panel applies within a minute. The first
-  automatic backup now comes one interval after the module starts; it used to run as the module started
-  (UltiKits/UltiBackup#24).
-- `config/backup.yml` 中的 `auto_backup.interval` 现在按文档所写以分钟为单位决定自动备份的间隔（默认 30，范围 1-1440）。
-  此前没有任何代码读取它，无论写多少，自动备份都每 30 分钟执行一次。通过 `/ul reload` 或面板修改的值会在一分钟内生效。
-  第一次自动备份现在在模块启动后一个间隔时执行；此前模块启动时就会立即执行一次（UltiKits/UltiBackup#24）。
+- The automatic-backup interval in `config/backup.yml` now takes effect. Before, automatic backups ran every
+  30 minutes whatever the file said: `auto_backup.interval` was read by nothing. The interval is now set by
+  `auto_backup.interval_seconds` (see "Changed" above), and the first automatic backup comes one interval after
+  the module starts; it used to run as the module started (UltiKits/UltiBackup#24).
+- `config/backup.yml` 中的自动备份间隔现在会生效。此前无论文件写多少，自动备份都每 30 分钟执行一次：没有任何代码读取
+  `auto_backup.interval`。间隔现在由 `auto_backup.interval_seconds` 设置（见上方"Changed"），第一次自动备份在模块启动后
+  一个间隔时执行；此前模块启动时就会立即执行一次（UltiKits/UltiBackup#24）。
 
 - `/backup create`, `/backup saveall` and `/backup admin create <player>` now read the player's
   inventory, armor, off-hand, ender chest and experience on the server's main thread, at the moment the

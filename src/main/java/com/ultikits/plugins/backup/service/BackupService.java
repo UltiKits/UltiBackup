@@ -47,13 +47,16 @@ public class BackupService {
     private File backupsDirectory;
     private Plugin bukkitPlugin;
 
-    /** Minutes counted since the last automatic backup, by {@link #autoBackupTick()}. Main thread only. */
-    private int minutesSinceAutoBackup = 0;
+    /** The legacy minutes key's default; any other value draws the load-time warning. */
+    private static final int LEGACY_INTERVAL_DEFAULT = 30;
 
     /**
-     * Initialize the service.
+     * Initialize the service, and warn when the legacy minutes key {@code auto_backup.interval} holds a value
+     * other than its default: that key no longer drives automatic backups. The check runs now and again after
+     * every successful {@code /ul reload} (a config change listener), so an operator who edits the old key and
+     * reloads is told at once rather than at the next restart.
      * <p>
-     * 初始化服务。
+     * 初始化服务；若旧的分钟键 {@code auto_backup.interval} 不是默认值，在加载时以及每次成功的 {@code /ul reload} 后警告。
      */
     @PostConstruct
     public void init() {
@@ -64,6 +67,27 @@ public class BackupService {
         this.backupsDirectory = new File(bukkitPlugin.getDataFolder(), "backups");
         if (!backupsDirectory.exists()) {
             backupsDirectory.mkdirs();
+        }
+        warnIfLegacyIntervalSet();
+        // Notified only after a reload that loaded and validated; never at init, which has already run.
+        config.addChangeListener(reloaded -> warnIfLegacyIntervalSet());
+    }
+
+    /**
+     * Logs one WARNING, in the server's language, when {@code auto_backup.interval} (minutes) holds a value
+     * other than its default 30, naming {@code auto_backup.interval_seconds}, the key automatic backups now
+     * follow. Read-only: the file is never written and the legacy value is never converted into the new key,
+     * because operator-written configuration is never rewritten automatically and reading a minutes value as
+     * seconds is exactly the backup storm the new key exists to avoid. Runs once at load and once after each
+     * successful {@code /ul reload}.
+     * <p>
+     * 旧的分钟键不是默认值时，按服务器语言警告并指出新键（加载时及每次重载后各一次）；只读，从不写入文件，也从不把旧值换算到新键。
+     */
+    private void warnIfLegacyIntervalSet() {
+        int legacy = config.getAutoBackupInterval();
+        if (legacy != LEGACY_INTERVAL_DEFAULT) {
+            plugin.getLogger().warn(plugin.i18n("backup.log.legacy_interval_ignored")
+                .replace("{VALUE}", String.valueOf(legacy)));
         }
     }
     
@@ -488,35 +512,37 @@ public class BackupService {
     }
     
     /**
-     * Counts minutes toward {@code auto_backup.interval} and runs {@link #autoBackupAll()} each time
-     * the configured number of minutes has passed.
+     * The scheduled automatic backup: backs up every online player holding {@code ultibackup.auto} if
+     * {@code auto_backup.enabled} is true right now, and does nothing otherwise.
      * <p>
-     * The interval is declared in minutes (1-1440). It used to be read by nothing: the backup ran on a
-     * fixed 36000-tick schedule, every 30 minutes whatever the file said (UltiKits/UltiBackup#24).
-     * The framework's config-bound {@code @Scheduled} reads its key in seconds, so binding this key
-     * would have turned an existing {@code interval: 30} into 30 seconds; counting minutes here keeps
-     * the key, its unit, its range and its default, and a value changed by {@code /ul reload} or the
-     * panel applies at the next minute.
+     * Timing is bound to {@code auto_backup.interval_seconds} (seconds) through the framework's config-bound
+     * {@code @Scheduled}; the default, 1800, lives only in {@link BackupConfig}. The same key is the first
+     * delay, so the first automatic backup comes one full interval after the module loads, not at load.
+     * {@code /ul reload} applies a changed interval keeping the task's place in its cycle; an out-of-range
+     * value is refused by the framework, which keeps the running interval and reports the reload as partial.
+     * The binding is sync only and requires {@code api-version: 630}.
      * <p>
-     * 每分钟计数一次，达到 {@code auto_backup.interval}（分钟）时执行自动备份；修改后的值在下一分钟生效。
+     * The old minutes key {@code auto_backup.interval} is not bound and not read here: the binding reads
+     * seconds, so binding it would have turned an existing {@code interval: 30} into a backup every 30
+     * seconds (it only draws a warning at load and after each reload, see {@link #init()}).
+     * <p>
+     * 定时自动备份：间隔绑定到 {@code auto_backup.interval_seconds}（秒），首次备份在加载后一个完整间隔；
+     * {@code /ul reload} 生效且不提前、不推迟。旧的分钟键不参与调度。
      */
-    @Scheduled(delay = 1200, period = 1200, async = false)
-    public void autoBackupTick() {
+    @Scheduled(config = BackupConfig.class, periodKey = "auto_backup.interval_seconds",
+            delayKey = "auto_backup.interval_seconds")
+    public void autoBackupIfEnabled() {
         if (!config.isAutoBackupEnabled()) {
             return;
         }
-        minutesSinceAutoBackup++;
-        if (minutesSinceAutoBackup >= config.getAutoBackupInterval()) {
-            minutesSinceAutoBackup = 0;
-            autoBackupAll();
-        }
+        autoBackupAll();
     }
 
     /**
-     * Auto backup all online players. Run by {@link #autoBackupTick()} every
-     * {@code auto_backup.interval} minutes. Checks config.auto_backup.enabled before executing.
+     * Auto backup all online players. Run by {@link #autoBackupIfEnabled()} every
+     * {@code auto_backup.interval_seconds} seconds. Checks config.auto_backup.enabled before executing.
      * <p>
-     * 自动备份所有在线玩家。由 {@link #autoBackupTick()} 每隔 {@code auto_backup.interval} 分钟调用。
+     * 自动备份所有在线玩家。由 {@link #autoBackupIfEnabled()} 每隔 {@code auto_backup.interval_seconds} 秒调用。
      * 执行前检查 config.auto_backup.enabled。
      */
     public void autoBackupAll() {
