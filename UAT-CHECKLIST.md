@@ -78,6 +78,12 @@ for real-machine verification, not user-facing documentation.
 - `plugin.i18n(...)` in this framework is a raw dictionary lookup with no `MessageFormat`
   processing or placeholder-escaping beyond the module's own explicit `String#replace` calls;
   every Expected line below reproduces `lang/en.yml`'s literal text.
+- **Console lines carry the module-logger prefix.** Every line this module logs reaches the console as
+  `[UltiTools] [UltiBackup] <text>`: Paper adds `[UltiTools] `, and the framework's module logger (`PluginLogger`)
+  adds `[UltiBackup] ` (this module's `plugin.yml` `name`). A console line quoted below is the `<text>` after both
+  prefixes, character for character, unless the row quotes a prefix itself; a row that counts or excludes this
+  module's console lines means lines carrying `[UltiBackup]`. A line the framework logs is quoted after Paper's
+  prefix, with its own `[UltiTools-API] ` where the row shows it.
 
 ## Backup and Restore Commands
 
