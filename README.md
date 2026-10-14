@@ -2,8 +2,6 @@
 
 [![UltiTools Module](https://img.shields.io/badge/UltiTools-Module-blue)](https://github.com/UltiKits/UltiTools-Reborn)
 [![UltiTools-API](https://img.shields.io/badge/UltiTools--API-6.3.0%2B-blue)](https://github.com/UltiKits/UltiTools-Reborn)
-[![Paper](https://img.shields.io/badge/Paper-1.21%2B-green)](https://papermc.io/)
-[![Java](https://img.shields.io/badge/Java-21%2B-orange)](https://adoptium.net/)
 
 **UltiBackup** 是 UltiTools-API 框架的一个插件模块，为 Minecraft 服务器提供玩家背包备份与恢复功能。支持自动备份、手动备份、GUI 管理和数据完整性校验。
 
@@ -14,7 +12,7 @@
 - 💾 **完整备份** - 备份背包、装备、副手、末影箱、经验值和位置信息
 - 🔄 **一键恢复** - 通过 GUI 或命令快速恢复任意备份
 - 🔍 **备份预览** - 恢复前预览备份内容（背包/装备/末影箱分页查看）
-- 🛡️ **数据校验** - MD5 校验和验证，检测文件损坏或篡改
+- 🛡️ **数据校验** - SHA-256 校验和验证，检测文件损坏或篡改
 
 ### 自动备份
 
@@ -38,7 +36,6 @@
 
 ### 依赖项
 - **UltiTools-API 6.3.0+** - 核心框架。本模块声明 `api-version: 630`，更早的框架会拒绝加载它
-- **Paper 1.21+**、**Java 21+** - 与其所依赖的 UltiTools 框架一致
 
 ### 安装步骤
 1. 确保已安装 UltiTools-API
@@ -162,7 +159,7 @@ UltiBackup 采用冷热数据分离架构，优化存储性能：
 │  ┌─────────────────────────────────────────┐               │
 │  │ BackupMetadata                          │               │
 │  │ - UUID、玩家名、时间戳                    │               │
-│  │ - 文件路径、MD5 校验和                    │               │
+│  │ - 文件路径、SHA-256 校验和                │               │
 │  │ - 位置信息、经验等级                      │               │
 │  └─────────────────────────────────────────┘               │
 │                                                             │
@@ -179,7 +176,7 @@ UltiBackup 采用冷热数据分离架构，优化存储性能：
 
 ### 数据完整性校验
 
-每个备份文件包含 MD5 校验和：
+每个备份文件包含 SHA-256 校验和：
 
 ```yaml
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -249,7 +246,7 @@ complete: true
 - ✨ 完整的背包备份功能
 - ✨ 自动备份（定时/死亡/退出）
 - ✨ GUI 管理界面
-- ✨ MD5 数据校验
+- ✨ SHA-256 数据校验
 - ✨ 备份预览功能
 - ✨ 管理员命令
 
