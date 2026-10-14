@@ -40,8 +40,8 @@
 ### 安装步骤
 1. 确保已安装 UltiTools-API
 2. 将 `UltiBackup.jar` 放入 `plugins/UltiTools/plugins/` 目录
-3. 重启服务器或执行 `/ultitools reload`
-4. 编辑配置文件 `plugins/UltiTools/UltiBackup/config/backup.yml`
+3. 重启服务器（`/ul reload` 只重载配置，不会加载新的模块 JAR）
+4. 编辑配置文件 `plugins/UltiTools/pluginConfig/UltiBackup/config/backup.yml`
 
 ## ⚙️ 配置说明
 
@@ -253,7 +253,7 @@ complete: true
 ## ❓ FAQ
 
 **Q: 备份文件存储在哪里？**
-> 备份文件存储在 `plugins/UltiTools/UltiBackup/backups/` 目录，元数据存储在数据库中。
+> 备份文件存储在 `plugins/UltiTools/backups/` 目录，元数据存储在数据库中。
 
 **Q: 如何手动备份数据？**
 > - 备份 `backups/` 目录下的所有 YAML 文件
