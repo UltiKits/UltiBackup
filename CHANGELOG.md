@@ -12,9 +12,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Require the released UltiTools-API 6.3.0 dependency. This is an independent MAJOR upgrade from
   the served 1.0.0 line: the module's UltiTools API level rises from 620 to 630, so operators must
   upgrade the framework before replacing the module JAR. The catalogue identity remains `ultibackup`.
-- Routine pushes now verify without publishing. Explicit publication consumes the exact retained
-  JAR and manifest through the pinned shared publisher, rather than rebuilding or using a floating CLI.
-
+- 要求使用已发布的 UltiTools-API 6.3.0 依赖。这是相对于当前提供的 1.0.0 版本线的独立主版本升级：模块的 UltiTools API
+  级别从 620 升至 630，因此管理员必须先升级框架，再替换模块 JAR。模块目录中的标识仍为 `ultibackup`。
 - Automatic backups now follow a new key, `auto_backup.interval_seconds` in `config/backup.yml`, in seconds
   (default 1800, the same 30 minutes as before; 1 to 107374182). The interval is scheduled by UltiTools 6.3.0's
   config-bound scheduling: a changed value applies at `/ul reload` without moving the next backup earlier or later
@@ -34,15 +33,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `auto_backup.interval_seconds`。旧键仍按 1-1440 校验，超出范围的值仍会使模块被拒绝加载（见 README 的已知限制）。
   服务器已有的配置文件会在首次启动时加入带默认值的新键，其中已有的内容不会改变。
 
-- This version requires UltiTools 6.3.0 or later and declares `api-version: 630` in `plugin.yml` (it was `621`).
+- This version requires UltiTools 6.3.0 or later and declares `api-version: 630` in `plugin.yml` (the released 1.0.0 declared `620`).
   The config-bound scheduling above exists only from UltiTools 6.3.0: an older framework would ignore it and run
   the automatic backup once at load instead of on the interval, so an older framework now refuses to load the
-  module and logs a warning instead. The README's framework minimum and its server and Java badges now say
-  UltiTools 6.3.0+, Paper 1.21+ and Java 21+ (UltiKits/UltiTools-Reborn#544).
-- 本版本需要 UltiTools 6.3.0 或更高版本，并在 `plugin.yml` 中声明 `api-version: 630`（原为 `621`）。上述配置绑定调度
+  module and logs a warning instead. The README's framework minimum now says UltiTools 6.3.0+
+  (UltiKits/UltiTools-Reborn#544).
+- 本版本需要 UltiTools 6.3.0 或更高版本，并在 `plugin.yml` 中声明 `api-version: 630`（已发布的 1.0.0 声明的是 `620`）。上述配置绑定调度
   只在 UltiTools 6.3.0 及以上存在：更早的框架会忽略它，只在加载时执行一次自动备份而不是按间隔执行，因此现在更早的框架会
-  拒绝加载本模块并记录一条警告。README 中的框架最低版本以及服务端与 Java 徽章已改为 UltiTools 6.3.0+、Paper 1.21+、
-  Java 21+（UltiKits/UltiTools-Reborn#544）。
+  拒绝加载本模块并记录一条警告。README 中的框架最低版本已改为 UltiTools 6.3.0+（UltiKits/UltiTools-Reborn#544）。
 
 - `plugin.yml` now declares `identify-string: ultibackup`, the key of this module's entry in the UltiCloud
   catalogue. The framework's update check and `/upm update` skip a module that does not declare it, so this module
