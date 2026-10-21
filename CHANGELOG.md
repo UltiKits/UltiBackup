@@ -5,9 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 本文件记录本项目的所有重要更改，格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)。
 
-## [Unreleased]
+## [2.0.0] - 2026-10-21
 
 ### Changed
+
+- Require the released UltiTools-API 6.3.0 dependency. This is an independent MAJOR upgrade from
+  the served 1.0.0 line: the module's UltiTools API level rises from 620 to 630, so operators must
+  upgrade the framework before replacing the module JAR. The catalogue identity remains `ultibackup`.
+- Routine pushes now verify without publishing. Explicit publication consumes the exact retained
+  JAR and manifest through the pinned shared publisher, rather than rebuilding or using a floating CLI.
 
 - Automatic backups now follow a new key, `auto_backup.interval_seconds` in `config/backup.yml`, in seconds
   (default 1800, the same 30 minutes as before; 1 to 107374182). The interval is scheduled by UltiTools 6.3.0's
