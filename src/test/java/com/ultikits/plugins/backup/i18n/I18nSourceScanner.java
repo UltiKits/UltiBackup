@@ -71,7 +71,7 @@ import java.util.stream.Stream;
  * arrow, a call after a comparison, a forwarding call inside an anonymous class), each fix exposing
  * the next, so the lexer was replaced by the compiler's parser instead of being patched again.
  * <p>
- * This file is copied unchanged into every module; only its package line differs.
+ * Module scanners are maintained separately; shared character properties do not imply byte-identical copies.
  */
 final class I18nSourceScanner {
 
