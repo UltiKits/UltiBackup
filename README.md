@@ -240,6 +240,13 @@ complete: true
 
 ## 📝 更新日志
 
+### v2.0.0
+
+- Requires UltiTools-API 6.3.0 or later (`api-version: 630`); upgrade the framework before replacing the module JAR.
+- Automatic backups use `auto_backup.interval_seconds` (default 1800 seconds), with interval changes applied by `/ul reload`. The old `auto_backup.interval` key is deprecated and is not converted.
+- Backup-creating commands capture player state on the main thread and write asynchronously; module reload now applies configuration changes.
+- Restore refuses unreadable item data before changing player state, preserves armor/off-hand when armor was not backed up, and leaves experience unchanged when it was not captured. See [CHANGELOG.md](CHANGELOG.md) for the full 2.0.0 history.
+
 ### v1.0.0
 
 - 🎉 初始版本发布

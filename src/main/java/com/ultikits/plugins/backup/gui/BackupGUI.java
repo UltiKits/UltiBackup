@@ -48,7 +48,7 @@ public class BackupGUI implements InventoryHolder {
         this.viewer = viewer;
         this.targetUuid = targetUuid;
         this.targetName = targetName;
-        this.backups = backupService.getBackups(targetUuid);
+        this.backups = new ArrayList<>(backupService.getBackups(targetUuid));
         
         String title = i18n("backup.gui.title")
             .replace("{PLAYER}", targetName);

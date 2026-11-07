@@ -52,7 +52,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * module's own code source, {@code lang/<code><ext>}), in the framework's own extension order
  * (read from {@code UltiToolsPlugin.LANGUAGE_EXTENSIONS}). Nothing about the loader is copied.
  * <p>
- * Module-specific parts are the three constants below; the rest of this file is copied unchanged.
+ * Module catalogue tests are maintained separately; shared properties do not imply byte-identical copies.
  */
 @DisplayName("Language guard 1: catalogue keys")
 class UltiBackupLanguageCatalogueTest {
