@@ -11,7 +11,7 @@ import java.util.List;
  * Automatically backs up player inventories and allows restoration.
  *
  * @author wisdomme
- * @version 1.0.0
+ * @version 2.0.0
  */
 @UltiToolsModule(
     scanBasePackages = {"com.ultikits.plugins.backup"}

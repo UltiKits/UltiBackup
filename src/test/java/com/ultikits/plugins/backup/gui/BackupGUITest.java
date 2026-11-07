@@ -2,6 +2,7 @@ package com.ultikits.plugins.backup.gui;
 
 import com.ultikits.plugins.backup.UltiBackupTestHelper;
 import com.ultikits.plugins.backup.entity.BackupMetadata;
+import com.ultikits.plugins.backup.listener.BackupListener;
 import com.ultikits.plugins.backup.service.BackupService;
 import com.ultikits.ultitools.abstracts.UltiToolsPlugin;
 import com.ultikits.ultitools.entities.Colors;
@@ -11,6 +12,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.Server;
 import org.bukkit.entity.Player;
+import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemFactory;
@@ -213,6 +215,71 @@ class BackupGUITest {
     @Nested
     @DisplayName("Refresh")
     class Refresh {
+
+        @Test
+        @DisplayName("Should show the first backup after clicking create in an empty browser")
+        void createsFirstBackupFromEmptyBrowser() throws Exception {
+            BackupMetadata created = createBackupList(1).get(0);
+            when(backupService.getBackups(targetUuid))
+                    .thenReturn(Collections.emptyList())
+                    .thenReturn(Collections.singletonList(created));
+            when(viewer.getUniqueId()).thenReturn(targetUuid);
+            when(viewer.hasPermission("ultibackup.admin")).thenReturn(false);
+            bukkitMock.when(() -> Bukkit.getPlayer(targetUuid)).thenReturn(viewer);
+            when(backupService.createBackup(viewer, "MANUAL")).thenReturn(created);
+            BackupGUI gui = new BackupGUI(plugin, backupService, viewer, targetUuid, "Target");
+            assertThat(gui.getBackupAtSlot(0)).isNull();
+
+            BackupListener listener = new BackupListener();
+            UltiBackupTestHelper.setField(listener, "plugin", plugin);
+            UltiBackupTestHelper.setField(listener, "backupService", backupService);
+            InventoryClickEvent event = mock(InventoryClickEvent.class);
+            when(event.getInventory()).thenReturn(gui.getInventory());
+            when(event.getWhoClicked()).thenReturn(viewer);
+            when(event.getRawSlot()).thenReturn(47);
+
+            listener.onBackupGUIClick(event);
+
+            verify(event).setCancelled(true);
+            verify(backupService).createBackup(viewer, "MANUAL");
+            verify(viewer).sendMessage("backup.message.created");
+            assertThat(gui.getBackupAtSlot(0)).isSameAs(created);
+            verify(gui.getInventory()).setItem(eq(0), argThat(item -> item.getType() == Material.CHEST));
+        }
+
+        @Test
+        @DisplayName("Should refresh repeatedly when service results are immutable")
+        void refreshesImmutableResults() {
+            List<BackupMetadata> original = Collections.unmodifiableList(createBackupList(2));
+            BackupMetadata replacement = createBackupList(1).get(0);
+            when(backupService.getBackups(targetUuid))
+                    .thenReturn(original)
+                    .thenReturn(Collections.singletonList(replacement))
+                    .thenReturn(Collections.emptyList());
+            BackupGUI gui = new BackupGUI(plugin, backupService, viewer, targetUuid, "Target");
+
+            gui.refresh();
+            assertThat(gui.getBackupAtSlot(0)).isSameAs(replacement);
+            assertThat(gui.getBackupAtSlot(1)).isNull();
+            gui.refresh();
+            assertThat(gui.getBackupAtSlot(0)).isNull();
+            assertThat(original).hasSize(2);
+        }
+
+        @Test
+        @DisplayName("Should not clear a service-owned list reused on refresh")
+        void preservesServiceOwnedList() {
+            List<BackupMetadata> serviceBackups = createBackupList(2);
+            BackupMetadata first = serviceBackups.get(0);
+            when(backupService.getBackups(targetUuid)).thenReturn(serviceBackups);
+            BackupGUI gui = new BackupGUI(plugin, backupService, viewer, targetUuid, "Target");
+
+            gui.refresh();
+
+            assertThat(serviceBackups).hasSize(2);
+            assertThat(gui.getBackupAtSlot(0)).isSameAs(first);
+            assertThat(gui.getBackupAtSlot(1)).isSameAs(serviceBackups.get(1));
+        }
 
         @Test
         @DisplayName("Should reload backups from service on refresh")
