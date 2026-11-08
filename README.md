@@ -243,9 +243,13 @@ complete: true
 ### v2.0.0
 
 - Requires UltiTools-API 6.3.0 or later (`api-version: 630`); upgrade the framework before replacing the module JAR.
+  需要 UltiTools-API 6.3.0 或更高版本（`api-version: 630`）；请先升级框架，再替换本模块 JAR。
 - Automatic backups use `auto_backup.interval_seconds` (default 1800 seconds), with interval changes applied by `/ul reload`. The old `auto_backup.interval` key is deprecated and is not converted.
+  自动备份改用 `auto_backup.interval_seconds`（默认 1800 秒），修改间隔后执行 `/ul reload` 即生效；旧的 `auto_backup.interval` 键已弃用，不会自动转换。
 - Backup-creating commands capture player state on the main thread and write asynchronously; module reload now applies configuration changes.
+  创建备份的命令在主线程采集玩家状态、异步写入；模块重载现在会应用配置改动。
 - Restore refuses unreadable item data before changing player state, preserves armor/off-hand when armor was not backed up, and leaves experience unchanged when it was not captured. See [CHANGELOG.md](CHANGELOG.md) for the full 2.0.0 history.
+  恢复时会先拒绝无法读取的物品数据，再改动玩家状态；未备份盔甲时保留现有盔甲与副手，未采集经验时不改动经验。完整的 2.0.0 变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 ### v1.0.0
 
